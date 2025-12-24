@@ -1,0 +1,264 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm neutral backgrounds */
+    --background: 40 20% 98%;
+    --foreground: 220 25% 10%;
+
+    /* Cards slightly warmer */
+    --card: 40 15% 99%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 40 15% 99%;
+    --popover-foreground: 220 25% 10%;
+
+    /* Deep teal - calm, focused, educational */
+    --primary: 175 60% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Soft warm gray */
+    --secondary: 40 10% 94%;
+    --secondary-foreground: 220 25% 15%;
+
+    /* Muted tones */
+    --muted: 40 10% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    /* Teal accent for highlights */
+    --accent: 175 50% 92%;
+    --accent-foreground: 175 60% 25%;
+
+    /* Warm amber for success/progress */
+    --success: 45 90% 50%;
+    --success-foreground: 45 100% 15%;
+
+    /* Completion green */
+    --complete: 160 60% 45%;
+    --complete-foreground: 0 0% 100%;
+
+    /* Soft coral for practice/recall */
+    --practice: 15 80% 60%;
+    --practice-foreground: 0 0% 100%;
+
+    /* Error states */
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 175 60% 30%;
+
+    --radius: 0.75rem;
+
+    /* Simulation specific */
+    --simulation-bg: 220 30% 97%;
+    --simulation-object: 175 60% 45%;
+    --simulation-track: 220 20% 85%;
+
+    /* Progress bar gradient */
+    --progress-start: 175 60% 45%;
+    --progress-end: 160 60% 40%;
+
+    /* Sidebar */
+    --sidebar-background: 40 15% 97%;
+    --sidebar-foreground: 220 25% 20%;
+    --sidebar-primary: 175 60% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 175 50% 94%;
+    --sidebar-accent-foreground: 175 60% 25%;
+    --sidebar-border: 40 15% 90%;
+    --sidebar-ring: 175 60% 30%;
+  }
+
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 40 15% 95%;
+
+    --card: 220 25% 10%;
+    --card-foreground: 40 15% 95%;
+
+    --popover: 220 25% 10%;
+    --popover-foreground: 40 15% 95%;
+
+    --primary: 175 55% 45%;
+    --primary-foreground: 220 25% 8%;
+
+    --secondary: 220 20% 15%;
+    --secondary-foreground: 40 15% 90%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 175 40% 20%;
+    --accent-foreground: 175 55% 70%;
+
+    --success: 45 85% 55%;
+    --success-foreground: 45 100% 10%;
+
+    --complete: 160 55% 50%;
+    --complete-foreground: 220 25% 8%;
+
+    --practice: 15 75% 55%;
+    --practice-foreground: 220 25% 8%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 18%;
+    --input: 220 20% 18%;
+    --ring: 175 55% 45%;
+
+    --simulation-bg: 220 25% 12%;
+    --simulation-object: 175 55% 50%;
+    --simulation-track: 220 20% 25%;
+
+    --sidebar-background: 220 25% 10%;
+    --sidebar-foreground: 40 15% 90%;
+    --sidebar-primary: 175 55% 45%;
+    --sidebar-primary-foreground: 220 25% 8%;
+    --sidebar-accent: 175 40% 18%;
+    --sidebar-accent-foreground: 175 55% 70%;
+    --sidebar-border: 220 20% 15%;
+    --sidebar-ring: 175 55% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Glass card effect */
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-sm;
+  }
+
+  /* Progress glow effect */
+  .progress-glow {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+  }
+
+  /* Teaching canvas */
+  .teaching-canvas {
+    @apply bg-card rounded-2xl border border-border/50 shadow-sm;
+  }
+
+  /* Topic item states */
+  .topic-item {
+    @apply relative pl-8 py-3 rounded-lg transition-all duration-300;
+  }
+
+  .topic-item::before {
+    content: '';
+    @apply absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-muted transition-all duration-300;
+  }
+
+  .topic-item.active::before {
+    @apply bg-primary scale-125;
+    box-shadow: 0 0 12px hsl(var(--primary) / 0.5);
+  }
+
+  .topic-item.completed::before {
+    @apply bg-complete;
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    @apply border-2 border-dashed border-border rounded-2xl p-12 transition-all duration-300;
+  }
+
+  .upload-zone:hover,
+  .upload-zone.dragging {
+    @apply border-primary bg-accent/30;
+  }
+
+  /* Simulation container */
+  .simulation-container {
+    @apply bg-simulation rounded-xl border border-border overflow-hidden;
+  }
+
+  /* Smooth number transitions */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Fade in animation */
+  .animate-fade-up {
+    animation: fadeUp 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Stagger children */
+  .stagger-children > * {
+    animation: fadeUp 0.4s ease-out forwards;
+    opacity: 0;
+  }
+
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+  /* Pulse glow */
+  .pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% {
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+    }
+    50% {
+      box-shadow: 0 0 20px 5px hsl(var(--primary) / 0.2);
+    }
+  }
+
+  /* Smooth reveal */
+  .reveal {
+    animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
