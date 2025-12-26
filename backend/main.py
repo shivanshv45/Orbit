@@ -2,6 +2,9 @@ from fastapi import FastAPI
 app = FastAPI()
 
 #jai ganesh🙏
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+@app.get("/hamster-desi")
+def happysex():
+    return {"daddy":"ah! cumming "}
+@app.get("/health")
+def health():
+    return {"status":"ok"}
