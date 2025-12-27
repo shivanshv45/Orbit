@@ -20,14 +20,11 @@ from unstructured_client.models.shared import (
 # CONFIG
 # --------------------------------------------------
 
-OUTPUT_DIR = "./output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
 if not UNSTRUCTURED_API_KEY:
     raise RuntimeError("UNSTRUCTURED_API_KEY is not set")
 
-app = FastAPI(title="Orbit Document Parser")
+app = FastAPI(title="Orbit")
 
 # --------------------------------------------------
 # CORE UNSTRUCTURED LOGIC
@@ -44,22 +41,56 @@ def run_on_demand_job(
     """
 
     input_files: list[InputFiles] = []
+    SUPPORTED_TYPES = {
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "text/html",
+        "application/rtf",
+        "application/epub+zip",
+        "application/xml",
+        "application/vnd.oasis.opendocument.text",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "image/jpeg",
+        "image/png",
+        "image/tiff",
+        "image/bmp",
+        "image/heic",
+
+    }
 
     for file in uploaded_files:
-        if not file.filename.lower().endswith(".pdf"):
-            raise ValueError(f"{file.filename} is not a PDF")
 
-        # 🔑 CRITICAL FIX: read file into BYTES
+        if file.content_type not in SUPPORTED_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file.content_type}"
+            )
+
+
+        file.file.seek(0)
         file_bytes = file.file.read()
 
         if not file_bytes:
-            raise ValueError(f"{file.filename} is empty")
-
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} is empty"
+            )
         input_files.append(
             InputFiles(
                 content=file_bytes,
                 file_name=file.filename,
-                content_type="application/pdf",
+                content_type=file.content_type,
             )
         )
 
@@ -110,32 +141,33 @@ def download_job_output(
         client: UnstructuredClient,
         job_id: str,
         input_file_ids: list[str],
-) -> list[str]:
+) -> dict[str, dict]:
     """
     Download parsed JSON outputs into output/ directory.
     """
-    saved_paths: list[str] = []
+
+    outputs: dict[str, dict] = {}
 
     for file_id in input_file_ids:
+
         response = client.jobs.download_job_output(
             request=DownloadJobOutputRequest(
                 job_id=job_id,
                 file_id=file_id,
             )
         )
+        outputs[file_id] = response.any
 
-        output_path = os.path.join(OUTPUT_DIR, f"{file_id}.json")
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(response.any, f, indent=2)
-
-        saved_paths.append(output_path)
-
-    return saved_paths
+    return outputs
 
 # --------------------------------------------------
 # API ENDPOINT
 # --------------------------------------------------
+
+
+@app.get("/")
+def check():
+    return {"content":"hello_world"}
 
 @app.post("/parse")
 async def parse_pdfs(files: List[UploadFile] = File(...)):
