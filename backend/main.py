@@ -27,7 +27,7 @@ if not UNSTRUCTURED_API_KEY:
 app = FastAPI(title="Orbit")
 
 # --------------------------------------------------
-# CORE UNSTRUCTURED LOGIC
+# CORE UNSTRUCTURED  LOGIC
 # --------------------------------------------------
 
 def run_on_demand_job(
@@ -35,6 +35,7 @@ def run_on_demand_job(
         uploaded_files: List[UploadFile],
         job_template_id: Optional[str] = None,
         job_nodes: Optional[list[dict[str, object]]] = None,
+        extract_image_block_to_payload:bool = False,
 ) -> tuple[str, list[str]]:
     """
     Create and start an Unstructured on-demand job using uploaded PDFs.
@@ -98,7 +99,13 @@ def run_on_demand_job(
         raise ValueError("Specify either job_template_id or job_nodes, not both")
 
     if job_template_id:
-        request_data = json.dumps({"template_id": job_template_id})
+        request_data = json.dumps({
+            "template_id": job_template_id,
+           "partition_parameters": {
+        "extract_image_block_to_payload": extract_image_block_to_payload,
+    }
+
+        })
     elif job_nodes:
         request_data = json.dumps({"job_nodes": job_nodes})
     else:
@@ -174,12 +181,17 @@ async def parse_pdfs(files: List[UploadFile] = File(...)):
     """
     Upload PDF(s) → Parse with Unstructured → Save JSON to output/
     """
+
     try:
+        start_time=time.perf_counter()
+        print("Parsing PDFs..starting....")
+
         with UnstructuredClient(api_key_auth=UNSTRUCTURED_API_KEY) as client:
             job_id, input_file_ids = run_on_demand_job(
                 client=client,
                 uploaded_files=files,
-                job_template_id="hi_res_and_enrichment",
+                job_template_id="fast",
+                extract_image_block_to_payload=False,
             )
 
             job = poll_for_job_status(client, job_id)
@@ -192,9 +204,13 @@ async def parse_pdfs(files: List[UploadFile] = File(...)):
                 job_id=job_id,
                 input_file_ids=input_file_ids,
             )
+            end_time=time.perf_counter()
+            total_time_taken=(end_time-start_time)*1000
 
+        print(f"\n⏱️  BENCHMARK: {(end_time-start_time):.2f} ms\n")
         return {
-            "message": "Parsing completed successfully",
+            "total_time_taken":total_time_taken,
+            "msdfsssage": "Parsing completed successfully test 0.1.0",
             "job_id": job_id,
             "outputs": outputs,
         }
