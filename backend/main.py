@@ -16,9 +16,6 @@ from unstructured_client.models.shared import (
     JobInformation
 )
 
-# --------------------------------------------------
-# CONFIG
-# --------------------------------------------------
 
 UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
 if not UNSTRUCTURED_API_KEY:
@@ -26,20 +23,14 @@ if not UNSTRUCTURED_API_KEY:
 
 app = FastAPI(title="Orbit")
 
-# --------------------------------------------------
-# CORE UNSTRUCTURED  LOGIC
-# --------------------------------------------------
 
 def run_on_demand_job(
         client: UnstructuredClient,
         uploaded_files: List[UploadFile],
         job_template_id: Optional[str] = None,
         job_nodes: Optional[list[dict[str, object]]] = None,
-        extract_image_block_to_payload:bool = False,
 ) -> tuple[str, list[str]]:
-    """
-    Create and start an Unstructured on-demand job using uploaded PDFs.
-    """
+
 
     input_files: list[InputFiles] = []
     SUPPORTED_TYPES = {
@@ -99,13 +90,7 @@ def run_on_demand_job(
         raise ValueError("Specify either job_template_id or job_nodes, not both")
 
     if job_template_id:
-        request_data = json.dumps({
-            "template_id": job_template_id,
-           "partition_parameters": {
-        "extract_image_block_to_payload": extract_image_block_to_payload,
-    }
-
-        })
+        request_data = json.dumps({"template_id": job_template_id})
     elif job_nodes:
         request_data = json.dumps({"job_nodes": job_nodes})
     else:
@@ -130,9 +115,7 @@ def poll_for_job_status(
         client: UnstructuredClient,
         job_id: str,
 ) -> JobInformation:
-    """
-    Poll job status until completion.
-    """
+
     while True:
         job = client.jobs.get_job(
             request={"job_id": job_id}
@@ -149,9 +132,7 @@ def download_job_output(
         job_id: str,
         input_file_ids: list[str],
 ) -> dict[str, dict]:
-    """
-    Download parsed JSON outputs into output/ directory.
-    """
+
 
     outputs: dict[str, dict] = {}
 
@@ -167,31 +148,37 @@ def download_job_output(
 
     return outputs
 
-# --------------------------------------------------
 # API ENDPOINT
-# --------------------------------------------------
 
 
 @app.get("/")
 def check():
-    return {"content":"hello_world"}
+    return {"content":"ddd"}
 
 @app.post("/parse")
-async def parse_pdfs(files: List[UploadFile] = File(...)):
-    """
-    Upload PDF(s) → Parse with Unstructured → Save JSON to output/
-    """
+async def parse_pdfs3(files: List[UploadFile] = File(...)):
 
     try:
-        start_time=time.perf_counter()
-        print("Parsing PDFs..starting....")
-
         with UnstructuredClient(api_key_auth=UNSTRUCTURED_API_KEY) as client:
+            vlm_partitioner_node = {
+                 "name": "Partitioner",
+     "subtype": "unstructured_api",
+  "type": "partition",
+  "settings": {
+    "strategy": "hi_res",
+      "pdf_infer_table_structure": False,
+
+    "extract_image_block_types": [],
+
+    "coordinates": False,
+    "exclude_elements": ["Image"],
+    "include_page_breaks": False,
+  }
+            }
             job_id, input_file_ids = run_on_demand_job(
                 client=client,
                 uploaded_files=files,
-                job_template_id="fast",
-                extract_image_block_to_payload=False,
+                job_nodes=[vlm_partitioner_node],
             )
 
             job = poll_for_job_status(client, job_id)
@@ -204,13 +191,9 @@ async def parse_pdfs(files: List[UploadFile] = File(...)):
                 job_id=job_id,
                 input_file_ids=input_file_ids,
             )
-            end_time=time.perf_counter()
-            total_time_taken=(end_time-start_time)*1000
 
-        print(f"\n⏱️  BENCHMARK: {(end_time-start_time):.2f} ms\n")
         return {
-            "total_time_taken":total_time_taken,
-            "msdfsssage": "Parsing completed successfully test 0.1.0",
+            "message": "Parsing completed successfully",
             "job_id": job_id,
             "outputs": outputs,
         }
@@ -218,5 +201,4 @@ async def parse_pdfs(files: List[UploadFile] = File(...)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
