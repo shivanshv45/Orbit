@@ -21,7 +21,7 @@ id              UUID (PK)
 user_id         UUID (FK → users.id)
 title           TEXT
 position        INTEGER        
-created_at      TIMESTAMP (idk if needed or not)
+created_at      TIMESTAMP (IDK if needed or not)
 
 TWO USERS CAN UPLOAD THE SAME PDF AND THEY MIGHT GET DIFFERENT RESULTS BASED ON THEM
 
@@ -33,7 +33,7 @@ title           TEXT
 content         TEXT
 score           SMALLINT
 position        INTEGER
-created_at      TIMESTAMP (idk if needed or not)
+created_at      TIMESTAMP (IDK if needed or not)
 
 
 score is supposed to help us identify if a subtopic is read or not , so how it works is that by default all the topics have a score of 0 , but for adaptive teaching when we 
