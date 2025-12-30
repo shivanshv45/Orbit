@@ -122,7 +122,7 @@ def poll_for_job_status(
         ).job_information
 
         if job.status in ("SCHEDULED", "IN_PROGRESS"):
-            time.sleep(5)
+            time.sleep(2.5)
         else:
             return job
 
@@ -156,7 +156,7 @@ def check():
     return {"content":"ddd"}
 
 @app.post("/parse")
-async def parse_pdfs3(files: List[UploadFile] = File(...)):
+async def parse_pdfs4(files: List[UploadFile] = File(...)):
 
     try:
         with UnstructuredClient(api_key_auth=UNSTRUCTURED_API_KEY) as client:
