@@ -139,6 +139,7 @@ async def parse_files(files: List[UploadFile]) -> dict:
                 "coordinates": False,
                 "exclude_elements": ["Image"],
                 "include_page_breaks": False,
+
             }
         }
 

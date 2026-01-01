@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 @router.post("")
-async def parse_pdfs(files: List[UploadFile] = File(...)):
+async def parse_pdfs1(files: List[UploadFile] = File(...)):
     try:
         result = await parse_files(files)
         manual_parsing(result)
