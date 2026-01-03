@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from routes.parse import router as parse_router
+from backend.routes.parse import router as parse_router
+
 
 app = FastAPI(title="Orbit")
 
