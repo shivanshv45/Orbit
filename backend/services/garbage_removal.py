@@ -40,15 +40,15 @@ def alphabet_ratio(text:str) -> float:
             char=char+1
     return char/len(text)
 
-def is_garbage(text:str) -> bool:
+def is_garbage(text:str,threshold_length:int,threshold_ratio:float ) -> bool:
     text=text.strip()
     if not text:
         return True
 
-    if len(text)<10:
+    if len(text)<threshold_length:
         return True
 
-    if alphabet_ratio(text)<0.5:
+    if alphabet_ratio(text)<threshold_ratio:
         return True
 
     if looks_like_page_number(text):
