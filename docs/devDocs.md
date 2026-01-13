@@ -41,3 +41,11 @@ update the score we normalise it to a scale not 0 to 100 but 1 to 100 , which wo
 
 
 
+
+->> Used ftfy for cleaning the text formatting ( for better prompts for llm , and less hallucinations chances )
+
+
+->> Used spacy for vector similarity and finding semantically similar topic titles
+
+
+ch 

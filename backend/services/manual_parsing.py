@@ -22,7 +22,6 @@ def  create_modules(intake:list):
             if previous_title!="":
                 new_element:dict={"title":previous_title,"content":content}
                 current_module.append(new_element)
-
                 # here we check for the semantic similarity between two topcis for module separation
                 if cosine_similarity(previous_title, clean_text) < 0.5:
                     modules.append(current_module)
@@ -80,3 +79,4 @@ def cosine_similarity(text1:str, text2:str):
     t1=nlp(text1)
     t2=nlp(text2)
     return t1.similarity(t2)
+
