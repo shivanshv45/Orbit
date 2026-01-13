@@ -1,7 +1,8 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 class Settings(BaseSettings):
-    DATABASE_URI:str
+    DATABASE_URL:str = "sqlite:///database.db"
+    DEBUG:bool = True
 
 
     class Config:

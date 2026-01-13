@@ -15,7 +15,7 @@ router = APIRouter(
 async def parse_pdfs1(files: List[UploadFile] = File(...)):
     try:
         result = await parse_files(files)
-        get_elements(result)
+
         return {
             "message": "Parsing completed successfully",
             **result
