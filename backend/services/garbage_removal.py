@@ -66,5 +66,4 @@ def is_garbage(text:str,threshold_length:int,threshold_ratio:float ) -> bool:
 
 
 
-print(is_garbage('----------'))
 
