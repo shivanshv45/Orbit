@@ -2,28 +2,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from uuid import uuid4
 from datetime import datetime, timezone
-import uuid
 
-
+async def user_exist(
+        db:AsyncSession,
+        user_id : str   ,
+        user_name:str
+)-> None:
+    await db.execute(
+        text("""
+             INSERT INTO users (id, name, created_at)
+             VALUES (:id, :name, :created_at)
+                 ON CONFLICT (id) DO NOTHING
+             """),
+        {
+            "id": user_id,
+            "name": user_name,
+            "created_at": datetime.now(timezone.utc)
+        }
+    )
 async def upload_to_db(
         dbstuf: AsyncSession,
         modules: list[list[dict]],
-        user_id: uuid.UUID,
-        user_name: str
-):
+        user_id: str)->str:
     try:
-        await dbstuf.execute(
-            text("""
-                 INSERT INTO users (id, name, created_at)
-                 VALUES (:id, :name, :created_at)
-                 """),
-            {
-                "id": user_id,
-                "name": user_name,
-                "created_at": datetime.now(timezone.utc)
-            }
-        )
-
         for module_pos, module in enumerate(modules, start=1):
             buffer_content = ""
             buffer_title = None
@@ -53,7 +54,7 @@ async def upload_to_db(
             if not module_has_valid_content:
                 continue
 
-            module_id = uuid4()
+            module_id = str(uuid4())
             module_title = module[0]["title"]
 
             await dbstuf.execute(
@@ -84,7 +85,7 @@ async def upload_to_db(
                                 )
                          """),
                     {
-                        "id": uuid4(),
+                        "id": str(uuid4()),
                         "module_id": module_id,
                         "title": sub["title"],
                         "content": sub["content"],
@@ -96,7 +97,7 @@ async def upload_to_db(
                 subtopic_position += 1
 
         await dbstuf.commit()
-        print("status:success")
+        return "success"
 
     except Exception:
         await dbstuf.rollback()

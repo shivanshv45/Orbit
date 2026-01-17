@@ -3,7 +3,7 @@ from google import genai
 from pydantic import BaseModel,ValidationError,Field
 from typing import List,Union,Literal,Optional,Annotated
 
-from backend.services.Gemini_Services.teaching_prompt import teachingPrompt
+from services.Gemini_Services.teaching_prompt import teachingPrompt
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
