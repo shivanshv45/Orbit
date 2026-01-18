@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, BookOpen, Brain, Zap } from 'lucide-react';
 import { FileUploader } from '@/components/upload/FileUploader';
-
+const BASE_SCALE = 0.3;
 const features = [
   {
     icon: Sparkles,
@@ -27,16 +27,123 @@ const features = [
   },
 ];
 
+const fontStyles = [
+  { fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: '10rem', letterSpacing: '0.08em' },
+  { fontFamily: "'DM Sans', sans-serif", fontWeight: 900, fontSize: '11.5rem', letterSpacing: '0.1em' },
+  { fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: '4.5rem', letterSpacing: '0.22em' },
+  { fontFamily: "'DM Sans', sans-serif", fontWeight: 500, fontSize: '12.2rem', letterSpacing: '0.9em' },
+  { fontFamily: "'DM Sans', sans-serif", fontWeight: 900, fontSize: '11.5rem', letterSpacing: '0.21em' },
+];
+
+const animationSequence = [
+  [0, 0, 0, 0, 0],
+  [1, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0],
+  [2, 1, 1, 0, 0],
+  [2, 2, 1, 1, 0],
+  [3, 2, 2, 1, 1],
+  [3, 3, 2, 2, 1],
+  [4, 3, 3, 2, 2],
+  [4, 4, 3, 3, 2],
+  [4, 4, 4, 3, 3],
+  [4, 4, 4, 4, 3],
+  [4, 4, 4, 4, 4],
+  [3, 4, 4, 4, 4],
+  [2, 3, 4, 4, 4],
+  [1, 2, 3, 4, 4],
+  [0, 1, 2, 3, 4],
+  [0, 0, 1, 2, 3],
+  [0, 0, 0, 1, 2],
+  [0, 0, 0, 0, 1],
+  [0, 0, 0, 0, 0],
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [showUploader, setShowUploader] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(true);
+  const [showContent, setShowContent] = useState(false);
+  const [animationStep, setAnimationStep] = useState(0);
+
+  useEffect(() => {
+    const styleInterval = setInterval(() => {
+      setAnimationStep(prev => {
+        const nextStep = prev + 1;
+        if (nextStep >= animationSequence.length) {
+          return prev;
+        }
+        return nextStep;
+      });
+    }, 150);
+
+    const animationTimeout = setTimeout(() => {
+      clearInterval(styleInterval);
+      setShowAnimation(false);
+      setTimeout(() => {
+        setShowContent(true);
+      }, 300);
+    }, animationSequence.length * 150 + 500);
+
+    return () => {
+      clearInterval(styleInterval);
+      clearTimeout(animationTimeout);
+    };
+  }, []);
 
   const handleFilesReady = () => {
     navigate('/curriculum');
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <AnimatePresence>
+        {showAnimation && (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-background flex items-center justify-center select-none"
+          >
+            <motion.div
+                style={{ scale: BASE_SCALE }} className="flex items-center justify-center gap-3">
+              {['O', 'R', 'B', 'I', 'T'].map((letter, index) => {
+                const styleIndex = animationSequence[animationStep]?.[index] ?? 0;
+                const currentStyle = fontStyles[styleIndex];
+                return (
+                  <motion.span
+                    key={index}
+                    animate={currentStyle}
+                    transition={{ duration: 0.4, ease: 'easeInOut' }}
+                    style={{
+                      fontFamily: currentStyle.fontFamily,
+                      fontWeight: currentStyle.fontWeight,
+                      fontSize: currentStyle.fontSize,
+                      letterSpacing: currentStyle.letterSpacing,
+                      WebkitFontSmoothing: 'antialiased',
+                      MozOsxFontSmoothing: 'grayscale',
+                      textRendering: 'optimizeLegibility',
+                      fontFeatureSettings: 'normal',
+                    }}
+                    className="text-primary"
+                  >
+                    {letter}
+                  </motion.span>
+                );
+              })}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showContent && (
+          <motion.div
+            initial={{ clipPath: 'inset(100% 0 0 0)' }}
+            animate={{ clipPath: 'inset(0% 0 0 0)' }}
+            transition={{ duration: 0.8, ease: 'easeInOut' }}
+            className="w-full"
+          >
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
@@ -44,7 +151,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Brain className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">Synapse</span>
+            <span className="font-semibold text-foreground">Orbit</span>
           </div>
           
           <button
@@ -210,6 +317,9 @@ export default function LandingPage() {
           <p>Built for focused, guided learning.</p>
         </div>
       </footer>
+      </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

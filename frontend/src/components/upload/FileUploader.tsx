@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, Presentation, Image, FileSpreadsheet, X, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createOrGetUser } from '@/logic/userSession';
 
 interface UploadedFile {
   id: string;
@@ -9,6 +10,7 @@ interface UploadedFile {
   type: 'pdf' | 'ppt' | 'doc' | 'image' | 'text' | 'other';
   size: string;
   status: 'uploading' | 'processing' | 'ready';
+  file: File;
 }
 
 const fileTypeConfig = {
@@ -24,10 +26,13 @@ interface FileUploaderProps {
   onFilesReady: () => void;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 export function FileUploader({ onFilesReady }: FileUploaderProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getFileType = (fileName: string): UploadedFile['type'] => {
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -45,36 +50,27 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+  const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
+    if (!selectedFiles || selectedFiles.length === 0) return;
     
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    const newFiles: UploadedFile[] = droppedFiles.map((file, index) => ({
+    const fileArray = Array.from(selectedFiles);
+    const newFiles: UploadedFile[] = fileArray.map((file, index) => ({
       id: `file-${Date.now()}-${index}`,
       name: file.name,
       type: getFileType(file.name),
       size: formatFileSize(file.size),
       status: 'uploading' as const,
+      file: file,
     }));
     
     setFiles(prev => [...prev, ...newFiles]);
-
-    // Simulate upload and processing
-    newFiles.forEach((file, index) => {
-      setTimeout(() => {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id ? { ...f, status: 'processing' as const } : f
-        ));
-      }, 500 + index * 200);
-
-      setTimeout(() => {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id ? { ...f, status: 'ready' as const } : f
-        ));
-      }, 1500 + index * 300);
-    });
   }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileSelect(e.dataTransfer.files);
+  }, [handleFileSelect]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -90,25 +86,65 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
     setFiles(prev => prev.filter(f => f.id !== id));
   };
 
-  const handleStartLearning = () => {
+  const handleStartLearning = async () => {
+    if (files.length === 0) return;
+    
     setIsProcessing(true);
-    setTimeout(() => {
-      onFilesReady();
-    }, 2000);
+    
+    const filesToUpload = files.filter(f => f.status === 'uploading' || f.status === 'ready' || f.status === 'processing');
+    
+    if (filesToUpload.length === 0) {
+      setIsProcessing(false);
+      return;
+    }
+    
+    setFiles(prev => prev.map(f => 
+      filesToUpload.some(fu => fu.id === f.id) 
+        ? { ...f, status: 'processing' as const }
+        : f
+    ));
+    
+    try {
+      const userSession = createOrGetUser();
+      const formData = new FormData();
+      
+      filesToUpload.forEach(fileObj => {
+        formData.append('files', fileObj.file);
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/parse`, {
+        method: 'POST',
+        headers: {
+          'X-User-Id': userSession.uid,
+          'X-User-Name': 'User',
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to parse files: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      setFiles(prev => prev.map(f => ({ ...f, status: 'ready' as const })));
+      
+      setTimeout(() => {
+        onFilesReady();
+      }, 500);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      setFiles(prev => prev.map(f => 
+        filesToUpload.some(fu => fu.id === f.id)
+          ? { ...f, status: 'uploading' as const }
+          : f
+      ));
+      setIsProcessing(false);
+    }
   };
 
-  const allFilesReady = files.length > 0 && files.every(f => f.status === 'ready');
-
-  // Add mock files for demo
-  const addMockFiles = () => {
-    const mockFiles: UploadedFile[] = [
-      { id: 'mock-1', name: 'Physics_Chapter_4_Newton.pdf', type: 'pdf', size: '2.4 MB', status: 'ready' },
-      { id: 'mock-2', name: 'Lecture_Slides_Forces.pptx', type: 'ppt', size: '5.1 MB', status: 'ready' },
-      { id: 'mock-3', name: 'Previous_Year_Questions.pdf', type: 'pdf', size: '890 KB', status: 'ready' },
-      { id: 'mock-4', name: 'Study_Notes.txt', type: 'text', size: '12 KB', status: 'ready' },
-    ];
-    setFiles(mockFiles);
-  };
+  const allFilesReady = files.length > 0 && files.some(f => f.status === 'uploading' || f.status === 'ready' || f.status === 'processing');
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6 pb-8">
@@ -124,8 +160,15 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={addMockFiles}
+        onClick={() => fileInputRef.current?.click()}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileInput}
+        />
         <div className="text-center space-y-4">
           <motion.div
             animate={{ y: isDragging ? -5 : 0 }}

@@ -1,10 +1,10 @@
-from sqlalchemy.ext.asyncio import session
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 from uuid import uuid4
 from datetime import datetime, timezone
 
 def user_exist(
-        db:session,
+        db:Session,
         user_id : str   ,
         user_name:str
 )-> None:
@@ -21,7 +21,7 @@ def user_exist(
         }
     )
 def upload_to_db(
-        dbstuf: session,
+        dbstuf: Session,
         modules: list[list[dict]],
         user_id: str)->str:
     try:
