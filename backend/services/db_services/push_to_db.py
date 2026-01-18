@@ -1,14 +1,14 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import session
 from sqlalchemy import text
 from uuid import uuid4
 from datetime import datetime, timezone
 
-async def user_exist(
-        db:AsyncSession,
+def user_exist(
+        db:session,
         user_id : str   ,
         user_name:str
 )-> None:
-    await db.execute(
+    db.execute(
         text("""
              INSERT INTO users (id, name, created_at)
              VALUES (:id, :name, :created_at)
@@ -20,8 +20,8 @@ async def user_exist(
             "created_at": datetime.now(timezone.utc)
         }
     )
-async def upload_to_db(
-        dbstuf: AsyncSession,
+def upload_to_db(
+        dbstuf: session,
         modules: list[list[dict]],
         user_id: str)->str:
     try:
@@ -57,7 +57,7 @@ async def upload_to_db(
             module_id = str(uuid4())
             module_title = module[0]["title"]
 
-            await dbstuf.execute(
+            dbstuf.execute(
                 text("""
                      INSERT INTO modules (id, user_id, title, position, created_at)
                      VALUES (:id, :user_id, :title, :position, :created_at)
@@ -73,7 +73,7 @@ async def upload_to_db(
 
             subtopic_position = 1
             for sub in pending_topics:
-                await dbstuf.execute(
+                dbstuf.execute(
                     text("""
                          INSERT INTO subtopics (
                              id, module_id, title, content,
@@ -96,9 +96,9 @@ async def upload_to_db(
                 )
                 subtopic_position += 1
 
-        await dbstuf.commit()
+        dbstuf.commit()
         return "success"
 
     except Exception:
-        await dbstuf.rollback()
+        dbstuf.rollback()
         raise
