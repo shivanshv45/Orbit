@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.parse import (router as parse_router)
 from config import get_settings
+from dotenv import load_dotenv
+load_dotenv()
+
 settings = get_settings()
 
 

@@ -3,11 +3,13 @@ from functools import lru_cache
 class Settings(BaseSettings):
     DATABASE_URL:str = "sqlite:///database.db"
     DEBUG:bool = True
+    UNSTRUCTURED_API_KEY:str
 
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "forbid"
 
 
 

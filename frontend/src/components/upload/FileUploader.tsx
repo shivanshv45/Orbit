@@ -82,6 +82,10 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
     setIsDragging(false);
   }, []);
 
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(e.target.files);
+  }, [handleFileSelect]);
+
   const removeFile = (id: string) => {
     setFiles(prev => prev.filter(f => f.id !== id));
   };

@@ -29,7 +29,7 @@ def  create_modules(intake:list):
 
                 # here we check for the semantic similarity between two topcis for module separation
             if previous_title is not None:
-                if cosine_similarity(previous_title, clean_text) < 0.35:
+                if cosine_similarity(previous_title, clean_text) < 0.50:
                     modules.append(current_module)
                     current_module=[]
             previous_title=clean_text
