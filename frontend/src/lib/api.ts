@@ -13,20 +13,17 @@ export const api = {
         return res.json();
     },
 
-    submitAnswer: async (data: {
+    updateSubtopicScore: async (data: {
         user_id: string;
         subtopic_id: string;
-        question_text: string;
-        user_answer: string;
-        is_correct: boolean;
-        attempt_number: number;
+        final_score: number;
     }) => {
-        const res = await fetch(`${API_BASE}/api/attempts`, {
+        const res = await fetch(`${API_BASE}/api/attempts/score`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
-        if (!res.ok) throw new Error('Failed to submit answer');
+        if (!res.ok) throw new Error('Failed to update score');
         return res.json();
     },
 };

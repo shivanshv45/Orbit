@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Lightbulb, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { api } from '@/lib/api';
-import { createOrGetUser } from '@/logic/userSession';
 import type { QuestionBlock as QuestionType } from '@/types/teaching';
 
 interface QuestionBlockProps {
     question: QuestionType;
     subtopicId: string;
-    onCorrect: () => void;
+    onCorrect: (attemptCount: number) => void;
 }
 
 export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlockProps) {
@@ -18,63 +16,37 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
     const [attemptCount, setAttemptCount] = useState(0);
     const [showResult, setShowResult] = useState(false);
     const [isCorrect, setIsCorrect] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasAnsweredCorrectly, setHasAnsweredCorrectly] = useState(false);
-    const { uid } = createOrGetUser();
 
     const handleSelectOption = (index: number) => {
         if (showResult || hasAnsweredCorrectly) return;
         setSelectedAnswer(index);
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         if (hasAnsweredCorrectly) return;
 
-        // Validate answer is selected
         if (question.questionType === 'mcq' && selectedAnswer === null) return;
         if (question.questionType === 'fill_in_blank' && !fillInAnswer.trim()) return;
 
-        setIsSubmitting(true);
+        let correct = false;
 
-        try {
-            // Check if answer is correct
-            let correct = false;
-            let userAnswer: string | number;
+        if (question.questionType === 'mcq') {
+            correct = selectedAnswer === question.correctIndex;
+        } else {
+            correct = fillInAnswer.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
+        }
 
-            if (question.questionType === 'mcq') {
-                userAnswer = selectedAnswer as number;
-                correct = selectedAnswer === question.correctIndex;
-            } else {
-                userAnswer = fillInAnswer.trim();
-                correct = fillInAnswer.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
-            }
+        const newAttemptCount = attemptCount + 1;
+        setAttemptCount(newAttemptCount);
+        setIsCorrect(correct);
+        setShowResult(true);
 
-            const newAttemptCount = attemptCount + 1;
-            setAttemptCount(newAttemptCount);
-            setIsCorrect(correct);
-            setShowResult(true);
-
-            // Submit to backend
-            await api.submitAnswer({
-                user_id: uid,
-                subtopic_id: subtopicId,
-                question_text: question.question,
-                user_answer: userAnswer.toString(),
-                is_correct: correct,
-                attempt_number: newAttemptCount,
-            });
-
-            if (correct) {
-                setHasAnsweredCorrectly(true);
-                // Notify parent that question was answered correctly
-                setTimeout(() => {
-                    onCorrect();
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Failed to submit answer:', error);
-        } finally {
-            setIsSubmitting(false);
+        if (correct) {
+            setHasAnsweredCorrectly(true);
+            setTimeout(() => {
+                onCorrect(newAttemptCount);
+            }, 300);
         }
     };
 
@@ -93,9 +65,10 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
         return `Attempt ${attemptCount}`;
     };
 
+    const shouldShowExplanation = isCorrect || attemptCount >= 4;
+
     return (
         <div className="my-6 p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20">
-            {/* Question Header */}
             <div className="flex items-start gap-3 mb-5">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
                     <AlertCircle className="w-5 h-5 text-primary" />
@@ -117,7 +90,6 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 </div>
             </div>
 
-            {/* MCQ Options */}
             {question.questionType === 'mcq' && question.options && (
                 <div className="space-y-2 mb-5">
                     {question.options.map((option, index) => {
@@ -126,7 +98,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
 
                         let optionState = 'default';
                         if (showResult || hasAnsweredCorrectly) {
-                            if (isCorrectAnswer) optionState = 'correct';
+                            if (isCorrectAnswer && shouldShowExplanation) optionState = 'correct';
                             else if (isSelected && !isCorrectAnswer) optionState = 'incorrect';
                         } else if (isSelected) {
                             optionState = 'selected';
@@ -149,7 +121,6 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                                     (showResult || hasAnsweredCorrectly) && "cursor-default"
                                 )}
                             >
-                                {/* Letter indicator */}
                                 <div className={cn(
                                     "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-colors flex-shrink-0",
                                     optionState === 'default' && "bg-muted text-muted-foreground",
@@ -157,7 +128,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                                     optionState === 'correct' && "bg-complete text-complete-foreground",
                                     optionState === 'incorrect' && "bg-destructive text-destructive-foreground"
                                 )}>
-                                    {showResult && isCorrectAnswer ? (
+                                    {showResult && isCorrectAnswer && shouldShowExplanation ? (
                                         <Check className="w-5 h-5" />
                                     ) : showResult && isSelected && !isCorrectAnswer ? (
                                         <X className="w-5 h-5" />
@@ -178,7 +149,6 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 </div>
             )}
 
-            {/* Fill in the Blank */}
             {question.questionType === 'fill_in_blank' && (
                 <div className="mb-5">
                     <input
@@ -198,9 +168,8 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 </div>
             )}
 
-            {/* Result & Explanation */}
             <AnimatePresence>
-                {showResult && (
+                {showResult && shouldShowExplanation && (
                     <motion.div
                         initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                         animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
@@ -232,15 +201,8 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                                         {isCorrect ? "Correct! Well done! 🎉" : "Not quite right"}
                                     </p>
                                     <p className="text-sm text-muted-foreground leading-relaxed">
-                                        {isCorrect ? question.explanations.correct : (
-                                            question.explanations.incorrect?.[attemptCount - 1] || question.explanations.correct
-                                        )}
+                                        {question.explanations.correct}
                                     </p>
-                                    {attemptCount >= 4 && !isCorrect && (
-                                        <p className="text-xs text-muted-foreground mt-2 italic">
-                                            Hint: {question.explanations.correct}
-                                        </p>
-                                    )}
                                 </div>
                             </div>
                         </div>
@@ -248,13 +210,12 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 )}
             </AnimatePresence>
 
-            {/* Action Button */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
             >
-                {!hasAnsweredCorrectly ? (
+                {!hasAnsweredCorrectly && (
                     showResult && !isCorrect ? (
                         <button
                             onClick={handleTryAgain}
@@ -266,24 +227,19 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                         <button
                             onClick={handleSubmit}
                             disabled={
-                                isSubmitting ||
                                 (question.questionType === 'mcq' && selectedAnswer === null) ||
                                 (question.questionType === 'fill_in_blank' && !fillInAnswer.trim())
                             }
                             className={cn(
                                 "w-full h-14 rounded-xl font-medium text-base transition-all duration-300",
-                                (selectedAnswer !== null || fillInAnswer.trim()) && !isSubmitting
+                                (selectedAnswer !== null || fillInAnswer.trim())
                                     ? "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-lg"
                                     : "bg-muted text-muted-foreground cursor-not-allowed"
                             )}
                         >
-                            {isSubmitting ? 'Submitting...' : 'Submit Answer'}
+                            Submit Answer
                         </button>
                     )
-                ) : (
-                    <div className="p-4 rounded-xl bg-complete/10 text-complete text-center font-medium">
-                        ✓ Question completed! Continue to next section
-                    </div>
                 )}
             </motion.div>
         </div>

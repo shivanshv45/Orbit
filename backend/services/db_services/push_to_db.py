@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 def user_exist(
         db:Session,
-        user_id : str   ,
+        user_id : str,
         user_name:str
 )-> None:
     db.execute(
@@ -20,11 +20,28 @@ def user_exist(
             "created_at": datetime.now(timezone.utc)
         }
     )
+
 def upload_to_db(
         dbstuf: Session,
         modules: list[list[dict]],
-        user_id: str)->str:
+        user_id: str,
+        curriculum_title: str)->str:
     try:
+        curriculum_id = str(uuid4())
+        
+        dbstuf.execute(
+            text("""
+                INSERT INTO curriculums (id, user_id, title, created_at)
+                VALUES (CAST(:id AS uuid), CAST(:user_id AS uuid), :title, :created_at)
+            """),
+            {
+                "id": curriculum_id,
+                "user_id": user_id,
+                "title": curriculum_title,
+                "created_at": datetime.now(timezone.utc)
+            }
+        )
+
         for module_pos, module in enumerate(modules, start=1):
             buffer_content = ""
             buffer_title = None
@@ -59,12 +76,12 @@ def upload_to_db(
 
             dbstuf.execute(
                 text("""
-                     INSERT INTO modules (id, user_id, title, position, created_at)
-                     VALUES (CAST(:id AS uuid), CAST(:user_id AS uuid), :title, :position, :created_at)
+                     INSERT INTO modules (id, curriculum_id, title, position, created_at)
+                     VALUES (CAST(:id AS uuid), CAST(:curriculum_id AS uuid), :title, :position, :created_at)
                      """),
                 {
                     "id": module_id,
-                    "user_id": user_id,
+                    "curriculum_id": curriculum_id,
                     "title": module_title,
                     "position": module_pos,
                     "created_at": datetime.now(timezone.utc)
@@ -97,7 +114,7 @@ def upload_to_db(
                 subtopic_position += 1
 
         dbstuf.commit()
-        return "success"
+        return curriculum_id
 
     except Exception:
         dbstuf.rollback()
