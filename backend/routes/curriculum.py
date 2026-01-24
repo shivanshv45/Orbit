@@ -5,57 +5,90 @@ from services.db_services.db import get_session
 
 router = APIRouter(prefix="/api", tags=["Curriculum"])
 
-@router.get("/curriculum")
-async def get_curriculum(
+@router.get("/curriculums")
+async def get_user_curriculums(
     user_id: str = Query(...),
     db: Session = Depends(get_session)
 ):
-    latest_upload = db.execute(
+    curriculums = db.execute(
         text("""
-            SELECT MAX(created_at) as latest 
-            FROM modules 
-            WHERE user_id = CAST(:user_id AS uuid)
+            SELECT id, title, created_at
+            FROM curriculums
+            WHERE user_id = CAST(:uid AS uuid)
+            ORDER BY created_at DESC
         """),
-        {"user_id": user_id}
-    ).fetchone()
-    
-    if not latest_upload or not latest_upload.latest:
-        return {"modules": []}
-    
-    modules_result = db.execute(
-        text("""
-            SELECT id, title, position 
-            FROM modules 
-            WHERE user_id = CAST(:user_id AS uuid) 
-            AND DATE(created_at) = DATE(:latest_date)
-            ORDER BY position
-        """),
-        {"user_id": user_id, "latest_date": latest_upload.latest}
+        {"uid": user_id}
     ).fetchall()
     
-    modules = []
-    for module_row in modules_result:
-        subtopics_result = db.execute(
-            text("SELECT id, title, score, position FROM subtopics WHERE module_id = CAST(:module_id AS uuid) ORDER BY position"),
-            {"module_id": str(module_row.id)}
+    return {
+        "curriculums": [
+            {
+                "id": str(c.id),
+                "title": c.title,
+                "created_at": c.created_at.isoformat()
+            }
+            for c in curriculums
+        ]
+    }
+
+@router.get("/curriculum")
+async def get_curriculum(
+    user_id: str = Query(...),
+    curriculum_id: str = Query(None),
+    db: Session = Depends(get_session)
+):
+    if curriculum_id:
+        target_id = curriculum_id
+    else:
+        latest = db.execute(
+            text("""
+                SELECT id FROM curriculums
+                WHERE user_id = CAST(:uid AS uuid)
+                ORDER BY created_at DESC
+                LIMIT 1
+            """),
+            {"uid": user_id}
+        ).fetchone()
+        
+        if not latest:
+            return {"modules": []}
+        
+        target_id = str(latest.id)
+    
+    modules = db.execute(
+        text("""
+            SELECT m.id, m.title, m.position
+            FROM modules m
+            WHERE m.curriculum_id = CAST(:cid AS uuid)
+            ORDER BY m.position
+        """),
+        {"cid": target_id}
+    ).fetchall()
+    
+    result = []
+    for module in modules:
+        subtopics = db.execute(
+            text("""
+                SELECT id, title, score, position
+                FROM subtopics
+                WHERE module_id = CAST(:mid AS uuid)
+                ORDER BY position
+            """),
+            {"mid": str(module.id)}
         ).fetchall()
         
-        subtopics = [
-            {
-                "id": str(st.id),
-                "title": st.title,
-                "score": st.score,
-                "position": st.position,
-                "status": "completed" if st.score >= 100 else "in-progress" if st.score > 0 else "available"
-            }
-            for st in subtopics_result
-        ]
-        
-        modules.append({
-            "id": str(module_row.id),
-            "title": module_row.title,
-            "position": module_row.position,
-            "subtopics": subtopics
+        result.append({
+            "id": str(module.id),
+            "title": module.title,
+            "subtopics": [
+                {
+                    "id": str(s.id),
+                    "title": s.title,
+                    "score": s.score,
+                    "status": "completed" if s.score > 0 else "available"
+                }
+                for s in subtopics
+            ]
         })
     
-    return {"modules": modules}
+    return {"modules": result, "curriculum_id": target_id}

@@ -4,6 +4,7 @@ from routes.parse import router as parse_router
 from routes.curriculum import router as curriculum_router
 from routes.teaching import router as teaching_router
 from routes.users import router as users_router
+from routes.attempts import router as attempts_router
 from config import get_settings
 from dotenv import load_dotenv
 load_dotenv()
@@ -25,6 +26,7 @@ app.include_router(parse_router)
 app.include_router(curriculum_router)
 app.include_router(teaching_router)
 app.include_router(users_router)
+app.include_router(attempts_router)
 
 
 @app.get("/")

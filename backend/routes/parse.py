@@ -32,12 +32,15 @@ async def parse_pdfs1(
         if not user_name:
             user_name = "User"
         
+        curriculum_title = files[0].filename.rsplit('.', 1)[0] if files else "Untitled Curriculum"
+        
         user_exist(db, user_id, user_name)
-        upload_to_db(db, modules, user_id)
+        curriculum_id = upload_to_db(db, modules, user_id, curriculum_title)
 
         return {
             "message": "Parsing completed successfully",
             "job_id": result.get("job_id"),
+            "curriculum_id": curriculum_id,
             "modules_created": len(modules)
         }
     except Exception as e:

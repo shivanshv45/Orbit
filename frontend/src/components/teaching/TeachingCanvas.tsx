@@ -4,7 +4,9 @@ import { Lightbulb, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
-import type { TeachingBlock } from '@/types/teaching';
+import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
+import { api } from '@/lib/api';
+import { createOrGetUser } from '@/logic/userSession';
 
 interface TeachingCanvasProps {
   blocks: TeachingBlock[];
@@ -17,12 +19,14 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [askAIOpen, setAskAIOpen] = useState<number | null>(null);
   const [questionAnswered, setQuestionAnswered] = useState<Record<number, boolean>>({});
+  const [questionScores, setQuestionScores] = useState<Record<number, number>>({});
+  const { uid } = createOrGetUser();
 
-  // Reset when subtopic changes
   useEffect(() => {
     setCurrentChunkIndex(0);
     setAskAIOpen(null);
     setQuestionAnswered({});
+    setQuestionScores({});
   }, [subtopicId]);
 
   if (!blocks || blocks.length === 0) {
@@ -35,16 +39,51 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
 
   const visibleBlocks = blocks.slice(0, currentChunkIndex + 1);
   const hasMoreChunks = currentChunkIndex < blocks.length - 1;
+  const currentBlock = blocks[currentChunkIndex];
 
-  const handleContinue = () => {
+  const questions = blocks.filter(b => b.type === 'question') as QuestionType[];
+  const totalQuestions = questions.length;
+  const answeredCount = Object.keys(questionAnswered).length;
+
+  const handleContinue = async () => {
+    if (currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]) {
+      return;
+    }
+
     if (hasMoreChunks) {
       setCurrentChunkIndex(prev => prev + 1);
       setAskAIOpen(null);
     } else {
-      // All chunks done, proceed to next subtopic
+      if (totalQuestions > 0 && answeredCount === totalQuestions) {
+        const scores = Object.values(questionScores);
+        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const finalScore = Math.round(avgScore * 100);
+
+        try {
+          await api.updateSubtopicScore({
+            user_id: uid,
+            subtopic_id: subtopicId,
+            final_score: finalScore,
+          });
+        } catch (error) {
+          console.error('Failed to update score:', error);
+        }
+      }
+
       setCurrentChunkIndex(0);
       onNext();
     }
+  };
+
+  const handleQuestionCorrect = (index: number, attemptCount: number) => {
+    setQuestionAnswered(prev => ({ ...prev, [index]: true }));
+
+    let score = 0.25;
+    if (attemptCount === 1) score = 1.0;
+    else if (attemptCount === 2) score = 0.75;
+    else if (attemptCount === 3) score = 0.5;
+
+    setQuestionScores(prev => ({ ...prev, [index]: score }));
   };
 
   const getTextContent = (block: TeachingBlock): string => {
@@ -126,37 +165,7 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         );
 
       case 'question':
-        return (
-          <div className="my-6 p-6 rounded-2xl bg-primary/5 border border-primary/20">
-            <p className="font-medium text-foreground mb-4">{block.question}</p>
-
-            {block.questionType === 'mcq' && block.options && (
-              <div className="space-y-2">
-                {block.options.map((option, i) => (
-                  <button
-                    key={i}
-                    className="w-full text-left p-3 rounded-lg border border-border hover:bg-accent transition-colors"
-                  >
-                    <span className="font-medium mr-2">{String.fromCharCode(65 + i)}.</span>
-                    {option}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {block.questionType === 'fill_in_blank' && (
-              <input
-                type="text"
-                placeholder="Type your answer..."
-                className="w-full p-3 rounded-lg border border-border bg-background"
-              />
-            )}
-
-            <div className="mt-4 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-              <p><strong>Explanation:</strong> {block.explanations.correct}</p>
-            </div>
-          </div>
-        );
+        return null;
 
       default:
         return null;
@@ -165,7 +174,6 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
 
   return (
     <div className="space-y-6">
-      {/* Lesson Progress */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -184,7 +192,6 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         </div>
       </motion.div>
 
-      {/* Content Sections - Shown chunk by chunk */}
       <div className="space-y-4">
         <AnimatePresence mode="sync">
           {visibleBlocks.map((block, index) => (
@@ -199,11 +206,18 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
                 "transition-opacity duration-300",
                 index < currentChunkIndex ? "opacity-60" : "opacity-100"
               )}>
-                {renderBlock(block)}
+                {block.type === 'question' ? (
+                  <QuestionBlock
+                    question={block}
+                    subtopicId={subtopicId}
+                    onCorrect={(attemptCount) => handleQuestionCorrect(index, attemptCount)}
+                  />
+                ) : (
+                  renderBlock(block)
+                )}
               </div>
 
-              {/* Ask AI Button - Shows on current chunk */}
-              {index === currentChunkIndex && (
+              {index === currentChunkIndex && block.type !== 'question' && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -231,7 +245,6 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
                 </motion.div>
               )}
 
-              {/* Divider between chunks */}
               {index < currentChunkIndex && (
                 <div className="mt-4 border-b border-border/50" />
               )}
@@ -240,7 +253,6 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         </AnimatePresence>
       </div>
 
-      {/* Continue Button */}
       <motion.div
         key={`continue-${currentChunkIndex}`}
         initial={{ opacity: 0, y: 10 }}
@@ -250,10 +262,12 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
       >
         <button
           onClick={handleContinue}
+          disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
           className={cn(
             "w-full h-14 rounded-2xl font-medium text-lg transition-all duration-300",
-            "bg-primary text-primary-foreground",
-            "hover:scale-[1.01] hover:shadow-glow"
+            currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]
+              ? "bg-muted text-muted-foreground cursor-not-allowed"
+              : "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-glow"
           )}
         >
           {hasMoreChunks ? 'Continue' : (hasNext ? 'Next Lesson' : 'Complete')}
