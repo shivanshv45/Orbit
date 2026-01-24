@@ -13,7 +13,6 @@ client=genai.Client(api_key=GEMINI_API_KEY);
 
 
 
-#Output Block Schema in Discriminated Union
 class Paragraph(BaseModel):
     type: Literal["paragraph"]
     content: str
@@ -25,55 +24,44 @@ class Formula(BaseModel):
     explanation: str
 
 
-class Simulation(BaseModel):
-    type: Literal["simulation"]
-    simulation_id: Literal[
-        "force_mass_acceleration",
-        "inertia_motion",
-        "action_reaction_pairs",
-    ]
-    learning_goal: str
-
-
-class ConceptCheck(BaseModel):
-    type: Literal["concept_check"]
-    question: str
-    expected_thinking: str
-
-
-class Misconception(BaseModel):
-    type: Literal["misconception"]
-    belief: str
-    correction: str
-
-
-class Tips(BaseModel):
-    type: Literal["tip"]
+class Insight(BaseModel):
+    type: Literal["insight"]
     content: str
 
 
-class QuizQuestion(BaseModel):
+class ListBlock(BaseModel):
+    type: Literal["list"]
+    items: List[str]
+
+
+class Simulation(BaseModel):
+    type: Literal["simulation"]
+    html: str
+    description: str
+
+
+class QuestionExplanations(BaseModel):
+    correct: str
+    incorrect: Optional[List[str]] = None
+
+
+class Question(BaseModel):
+    type: Literal["question"]
+    questionType: Literal["mcq", "fill_in_blank"]
     question: str
-    options: List[str]
-    correct_option_index: int
-    explanation: str
+    options: Optional[List[str]] = None
+    correctIndex: Optional[int] = None
+    correctAnswer: Optional[str] = None
+    explanations: QuestionExplanations
 
 
-class Quiz(BaseModel):
-    type: Literal["quiz"]
-    questions: List[QuizQuestion]
-
-TeachingBlock = Annotated[
-    Union[
-        Paragraph,
-        Formula,
-        Simulation,
-        ConceptCheck,
-        Misconception,
-        Tips,
-        Quiz,
-    ],
-    Field(discriminator="type"),
+TeachingBlock = Union[
+    Paragraph,
+    Formula,
+    Insight,
+    ListBlock,
+    Simulation,
+    Question,
 ]
 
 
@@ -111,22 +99,32 @@ Learner Score:
 """
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=user_prompt,
         config={
             "system_instruction": teachingPrompt,
             "response_mime_type": "application/json",
             "response_schema": TeachingResponse,
-            "temperature": 0.4, #stable and predictable
+            "temperature": 0.4,
         },
     )
 
+    print(f"[DEBUG] Gemini raw response text: {response.text[:500]}...")  # First 500 chars
+    print(f"[DEBUG] Gemini response candidates: {len(response.candidates)}")
+
     try:
         teaching_data: TeachingResponse = response.parsed
+        print(f"[DEBUG] Parsed teaching data: {teaching_data}")
+        print(f"[DEBUG] Number of blocks: {len(teaching_data.blocks)}")
+        if teaching_data.blocks:
+            print(f"[DEBUG] First block type: {teaching_data.blocks[0].type}")
     except ValidationError as e:
+        print(f"[ERROR] Validation error: {e}")
+        print(f"[ERROR] Raw response: {response.text}")
         raise ValueError("Invalid Gemini teaching output") from e
 
     if not teaching_data.blocks:
+        print(f"[ERROR] No blocks generated! Raw response: {response.text}")
         raise ValueError("No teaching blocks generated")
 
     return teaching_data

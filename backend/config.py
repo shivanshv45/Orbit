@@ -4,6 +4,7 @@ class Settings(BaseSettings):
     DATABASE_URL:str = "sqlite:///database.db"
     DEBUG:bool = True
     UNSTRUCTURED_API_KEY:str
+    GEMINI_API_KEY:str
 
 
     class Config:

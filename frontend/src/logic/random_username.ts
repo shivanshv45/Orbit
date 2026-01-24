@@ -1,4 +1,4 @@
-const firstnames:string[] = ["Orbit", "Nova", "Luna", "Neo", "Zen", "Astro", "Astra", "Vega", "Sol", "Cosmo",
+const firstnames: string[] = ["Orbit", "Nova", "Luna", "Neo", "Zen", "Astro", "Astra", "Vega", "Sol", "Cosmo",
     "Echo", "Lyra", "Sora", "Kairo", "Riven", "Aiden", "Arlo", "Milo", "Zayn", "Iris",
     "Elio", "Nico", "Raya", "Skye", "Juno", "Cleo", "Ari", "Theo", "Eren", "Kael",
     "Kian", "Noel", "Rey", "Sage", "Wren", "Finn", "Ezra", "Jade", "Kira", "Maya",
@@ -9,7 +9,7 @@ const firstnames:string[] = ["Orbit", "Nova", "Luna", "Neo", "Zen", "Astro", "As
     "Zephyr", "Nimbus", "Ray", "Spark", "Drift", "Wave", "Reef", "Tide", "Vale", "Summit",
     "Cove", "Grove", "Stone", "Ridge", "Pine", "Basil", "Olive", "Lotus", "Indigo", "Pearl"];
 
-const lastnames:string[] = [ "Learner", "Scholar", "Thinker", "Reader", "Writer", "Builder", "Maker", "Creator", "Explorer", "Seeker",
+const lastnames: string[] = ["Learner", "Scholar", "Thinker", "Reader", "Writer", "Builder", "Maker", "Creator", "Explorer", "Seeker",
     "Dreamer", "Doer", "Runner", "Climber", "Coder", "Hacker", "Engineer", "Designer", "Artist", "Craft",
     "Fox", "Wolf", "Hawk", "Raven", "Owl", "Falcon", "Tiger", "Panda", "Otter", "Koala",
     "Lion", "Bear", "Shark", "Dolphin", "Whale", "Ray", "Eagle", "Viper", "Cobra", "Dragon",
@@ -20,14 +20,12 @@ const lastnames:string[] = [ "Learner", "Scholar", "Thinker", "Reader", "Writer"
     "Syntax", "Compiler", "Debugger", "Server", "Client", "Router", "Packet", "Module", "Subtopic", "Chapter",
     "Spark", "Flame", "Ember", "Frost", "Storm", "Thunder", "Breeze", "Nimbus", "Shadow", "Echo"];
 
-const randomFromArray=(arr:string[]):string => {
+const randomFromArray = (arr: string[]): string => {
     return arr[Math.floor(Math.random() * arr.length)];
-
 }
 
- const randomUserName=():string=>{
-    const firstname:string = randomFromArray(firstnames);
-    const lastname:string = randomFromArray(lastnames);
+export const randomUserName = (): string => {
+    const firstname: string = randomFromArray(firstnames);
+    const lastname: string = randomFromArray(lastnames);
     return `${firstname} ${lastname}`;
 }
-
