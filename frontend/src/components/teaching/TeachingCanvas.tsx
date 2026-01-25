@@ -4,6 +4,7 @@ import { Lightbulb, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
+import { SimulationBlock } from '@/components/teaching/SimulationBlock';
 import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
@@ -153,15 +154,7 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
 
       case 'simulation':
         return (
-          <div className="my-6">
-            {block.description && (
-              <p className="text-sm text-muted-foreground mb-4">{block.description}</p>
-            )}
-            <div
-              className="rounded-2xl overflow-hidden bg-background border border-border"
-              dangerouslySetInnerHTML={{ __html: block.html }}
-            />
-          </div>
+          <SimulationBlock html={block.html} description={block.description} />
         );
 
       case 'question':

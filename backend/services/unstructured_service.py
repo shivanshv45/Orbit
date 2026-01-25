@@ -2,6 +2,9 @@ import os
 import json
 import time
 from typing import List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import UploadFile, HTTPException
 
@@ -17,6 +20,8 @@ from unstructured_client.models.shared import (
 )
 
 UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
+if UNSTRUCTURED_API_KEY:
+    UNSTRUCTURED_API_KEY = UNSTRUCTURED_API_KEY.strip().lstrip('=')
 if not UNSTRUCTURED_API_KEY:
     raise RuntimeError("UNSTRUCTURED_API_KEY is not set")
 
