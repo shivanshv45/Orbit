@@ -26,4 +26,14 @@ export const api = {
         if (!res.ok) throw new Error('Failed to update score');
         return res.json();
     },
+
+    askAI: async (message: string, context: string) => {
+        const res = await fetch(`${API_BASE}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, context }),
+        });
+        if (!res.ok) throw new Error('Failed to get AI response');
+        return res.json();
+    },
 };
