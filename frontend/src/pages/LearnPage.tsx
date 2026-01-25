@@ -1,19 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { TopicNavigator } from '@/components/layout/TopicNavigator';
 import { ProgressIndicator } from '@/components/layout/ProgressIndicator';
 import { TeachingCanvas } from '@/components/teaching/TeachingCanvas';
-import { PracticeQuestion } from '@/components/practice/PracticeQuestion';
-import { mockCourse, practiceQuestions } from '@/data/mockCurriculum';
+import { useCurriculum } from '@/hooks/useCurriculum';
+import { useTeachingContent } from '@/hooks/useTeachingContent';
+import { createOrGetUser } from '@/logic/userSession';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { Module, Subtopic } from '@/types/curriculum';
 
 export default function LearnPage() {
   const navigate = useNavigate();
   const { subtopicId } = useParams<{ subtopicId: string }>();
-  const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || 'sub-2-2-1');
-  const [showPractice, setShowPractice] = useState(false);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
+  const { uid } = createOrGetUser();
+  const queryClient = useQueryClient();
+
+  const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum();
+  const { data: teachingData, isLoading: teachingLoading, error } = useTeachingContent(currentSubtopicId);
 
   // Update current subtopic when URL changes
   useEffect(() => {
@@ -22,58 +30,76 @@ export default function LearnPage() {
     }
   }, [subtopicId]);
 
-  // Find current module
-  const currentModule = mockCourse.modules.find(m => 
-    m.topics.some(t => t.subtopics.some(s => s.id === currentSubtopicId))
-  ) || mockCourse.modules[1];
+  // Find current module based on which module contains the current subtopic
+  const currentModule = curriculumData?.modules.find((m: Module) =>
+    m.subtopics.some((s: Subtopic) => s.id === currentSubtopicId)
+  ) || curriculumData?.modules[0];
+
+  // Get all subtopics for navigation
+  const allSubtopics: Subtopic[] = curriculumData?.modules.flatMap((m: Module) => m.subtopics) || [];
+  const currentIndex = allSubtopics.findIndex((s: Subtopic) => s.id === currentSubtopicId);
+  const nextSubtopic = currentIndex >= 0 && currentIndex < allSubtopics.length - 1
+    ? allSubtopics[currentIndex + 1]
+    : null;
+
+  // Prefetch next subtopic
+  useEffect(() => {
+    if (nextSubtopic && nextSubtopic.id) {
+      queryClient.prefetchQuery({
+        queryKey: ['teaching', nextSubtopic.id],
+        queryFn: () => api.getTeachingContent(nextSubtopic.id, uid),
+        staleTime: Infinity,
+      });
+    }
+  }, [nextSubtopic, queryClient, uid]);
 
   const handleSelectSubtopic = (id: string) => {
-    // Check if it's available
-    const subtopic = currentModule.topics
-      .flatMap(t => t.subtopics)
-      .find(s => s.id === id);
-    
-    if (subtopic && subtopic.status !== 'locked') {
-      setCurrentSubtopicId(id);
-      setShowPractice(false);
-      navigate(`/learn/${id}`, { replace: true });
-    }
+    setCurrentSubtopicId(id);
+    navigate(`/learn/${id}`, { replace: true });
   };
 
   const handleNext = () => {
-    // Get all subtopics in order
-    const allSubtopics = currentModule.topics.flatMap(t => t.subtopics);
-    const currentIndex = allSubtopics.findIndex(s => s.id === currentSubtopicId);
-    
-    // If this was the simulation, show practice
-    if (currentSubtopicId === 'sub-2-2-2' && !showPractice) {
-      setShowPractice(true);
-      return;
-    }
-
-    // Move to next subtopic
-    if (currentIndex < allSubtopics.length - 1) {
-      const nextSubtopic = allSubtopics[currentIndex + 1];
-      if (nextSubtopic.status !== 'locked') {
-        handleSelectSubtopic(nextSubtopic.id);
-      }
-    }
-  };
-
-  const handlePracticeComplete = (correct: boolean) => {
-    if (currentQuestionIndex < practiceQuestions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+    if (nextSubtopic) {
+      handleSelectSubtopic(nextSubtopic.id);
     } else {
-      // All questions done, move to next lesson
-      setShowPractice(false);
-      setCurrentQuestionIndex(0);
-      handleNext();
+      navigate('/curriculum');
     }
   };
 
   const handleBack = () => {
     navigate('/curriculum');
   };
+
+  // Calculate some stats for progress panel
+  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed').length;
+  const totalSubtopics = allSubtopics.length;
+
+  if (curriculumLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-foreground text-lg font-medium">Loading curriculum...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentModule || !currentSubtopicId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-foreground text-lg font-medium mb-2">No content available</p>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Back to Curriculum
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen h-screen bg-background flex overflow-hidden">
@@ -88,25 +114,35 @@ export default function LearnPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto p-8 pr-16">
-          {showPractice ? (
-            <motion.div
-              key="practice"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <div className="mb-8">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-practice/10 text-practice text-sm font-medium">
-                  Practice Time
-                </span>
+          {teachingLoading ? (
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+                <p className="text-foreground text-lg font-medium">Generating your personalized lesson...</p>
+                <p className="text-muted-foreground text-sm mt-2">This may take a few moments</p>
               </div>
-              <PracticeQuestion
-                question={practiceQuestions[currentQuestionIndex]}
-                onComplete={handlePracticeComplete}
-                questionNumber={currentQuestionIndex + 1}
-                totalQuestions={practiceQuestions.length}
-              />
-            </motion.div>
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center max-w-md">
+                <p className="text-foreground text-lg font-medium mb-2">Failed to load teaching content</p>
+                <p className="text-muted-foreground text-sm mb-4">{error.message}</p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={handleBack}
+                    className="px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-accent transition-colors"
+                  >
+                    Back to Curriculum
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
             <motion.div
               key={currentSubtopicId}
@@ -115,11 +151,10 @@ export default function LearnPage() {
               exit={{ opacity: 0, x: -20 }}
             >
               <TeachingCanvas
+                blocks={teachingData?.blocks || []}
                 subtopicId={currentSubtopicId}
                 onNext={handleNext}
-                onPrevious={() => {}}
-                isFirst={false}
-                isLast={false}
+                hasNext={!!nextSubtopic}
               />
             </motion.div>
           )}
@@ -129,8 +164,8 @@ export default function LearnPage() {
       {/* Right Sidebar - Progress (Toggleable) */}
       <ProgressIndicator
         streak={3}
-        lessonsCompleted={8}
-        totalLessons={22}
+        lessonsCompleted={completedSubtopics}
+        totalLessons={totalSubtopics}
         practiceScore={85}
         estimatedTimeLeft="2h 15m"
         isOpen={progressPanelOpen}
