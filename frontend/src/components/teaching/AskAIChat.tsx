@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 
 interface AskAIChatProps {
   quotedText: string;
@@ -19,34 +20,35 @@ export function AskAIChat({ quotedText, isOpen, onClose }: AskAIChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!inputText.trim() && messages.length === 0) {
-      // First message with just quoted text
       const userMessage = `I have a question about: "${quotedText}"`;
       setMessages([{ role: 'user', content: userMessage }]);
-      simulateAIResponse(userMessage);
+      await getAIResponse(userMessage);
     } else if (inputText.trim()) {
-      const fullMessage = messages.length === 0 
+      const fullMessage = messages.length === 0
         ? `Regarding "${quotedText}": ${inputText}`
         : inputText;
       setMessages(prev => [...prev, { role: 'user', content: fullMessage }]);
       setInputText('');
-      simulateAIResponse(fullMessage);
+      await getAIResponse(fullMessage);
     }
   };
 
-  const simulateAIResponse = (userMessage: string) => {
+  const getAIResponse = async (userMessage: string) => {
     setIsTyping(true);
-    setTimeout(() => {
-      const mockResponses = [
-        "Great question! This concept is foundational to understanding Newton's laws. The key idea is that force and acceleration are directly proportional - when you double the force, you double the acceleration (assuming mass stays constant).",
-        "Think of it this way: imagine pushing a shopping cart vs pushing a car. Same force, but very different accelerations because of the mass difference. This is exactly what F = ma describes!",
-        "The mathematical relationship F = ma tells us that acceleration depends on both the force applied AND the mass of the object. Heavier objects need more force to achieve the same acceleration.",
-      ];
-      const response = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+    try {
+      const response = await api.askAI(userMessage, quotedText);
+      setMessages(prev => [...prev, { role: 'assistant', content: response.response }]);
+    } catch (error) {
+      console.error('AI chat error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.'
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -66,7 +68,6 @@ export function AskAIChat({ quotedText, isOpen, onClose }: AskAIChatProps) {
           transition={{ duration: 0.2 }}
           className="mt-3 rounded-2xl border border-border bg-card shadow-lg overflow-hidden"
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-border bg-muted/30">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
@@ -80,21 +81,19 @@ export function AskAIChat({ quotedText, isOpen, onClose }: AskAIChatProps) {
             </button>
           </div>
 
-          {/* Quoted Text */}
           <div className="p-3 bg-accent/30 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1">Asking about:</p>
             <p className="text-sm text-foreground italic line-clamp-2">"{quotedText}"</p>
           </div>
 
-          {/* Messages */}
           <div className="max-h-48 overflow-y-auto p-3 space-y-3">
             {messages.map((msg, i) => (
               <div
                 key={i}
                 className={cn(
                   "text-sm rounded-xl p-3",
-                  msg.role === 'user' 
-                    ? "bg-primary/10 text-foreground ml-8" 
+                  msg.role === 'user'
+                    ? "bg-primary/10 text-foreground ml-8"
                     : "bg-muted text-foreground mr-4"
                 )}
               >
@@ -112,7 +111,6 @@ export function AskAIChat({ quotedText, isOpen, onClose }: AskAIChatProps) {
             )}
           </div>
 
-          {/* Input */}
           <div className="p-3 border-t border-border">
             <div className="flex gap-2">
               <input
@@ -122,10 +120,12 @@ export function AskAIChat({ quotedText, isOpen, onClose }: AskAIChatProps) {
                 onKeyDown={handleKeyDown}
                 placeholder={messages.length === 0 ? "Add more context or just click send..." : "Ask a follow-up question..."}
                 className="flex-1 px-3 py-2 rounded-xl bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                disabled={isTyping}
               />
               <button
                 onClick={handleSubmit}
-                className="px-3 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                disabled={isTyping}
+                className="px-3 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
               </button>
