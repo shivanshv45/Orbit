@@ -35,7 +35,7 @@ def  create_modules(intake:list):
             previous_title=clean_text
             content=""
             continue
-
+    
         elif type_of_element=="NarrativeText"  :
 
 

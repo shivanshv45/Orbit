@@ -1,232 +1,192 @@
-Orbit is a learning app that helps students actually understand what they study, instead of just finishing chapters.
-Most students already have study material => notes, PDFs, slides, syllabus documents, and past exam questions.
-The problem is not lack of content.
-The problem is knowing what to study, in what order, and how well you actually understand it.
-Students and anyone in general gets stuck in a loop of prompting , reviewing , new chats , “teach me like im’a 5 yo” ,
-Orbit is aimed to solve that . Could also have support for dyslexia (later maybe)
-
-How Orbit enhances studying
-Orbit doesn’t change what you study, it improves how you study.
-To do this, Orbit adds three learning supports on top of your existing material:
-
-Confidence-based adaptation
-Orbit adjusts what it teaches next based on how easily you answer questions, not just whether the answer is right or wrong.
-
-
-Interactive simulations
-When a concept is hard to understand with text alone, Orbit generates simulations so you can see and interact with the idea.
-
-
-Optional attention support
-If enabled, Orbit uses basic camera signals (like tiredness or distraction) to slow down, repeat, or suggest breaks when needed.
-
-
-These supports work quietly in the background, helping you learn at the right pace without extra effort from you.
-
-
-
-What you do in Orbit
-You upload everything you already use for studying, such as:
-class notes
-
-
-PDFs
-
-
-PowerPoint slides
-
-
-syllabus documents
-
-
-previous year questions
-
-
-
-That’s it.
-You don’t need to organize it yourself , or Do anything in general .
-
-It works on the principle of  “Shut up and Learn”
-
-What Orbit does with your material
-Once the material is uploaded, Orbit analyzes and organizes it automatically.
-It breaks the content into:
-big topics
-
-
-smaller subtopics
-
-
-very small learning units (tiny ideas that can be learned quickly)
-
-
-These small units are important because they let Orbit teach step by step, instead of dumping everything at once.
-Each small unit is linked to the exact pages or slides it came from, so Orbit always stays relevant to your material  not random internet explanations.
-
-But it Doesn't have to be given material necessarily , You could just type in to teach “ fastAPI” and it would work the same without any material.
-How learning works in Orbit
-Orbit teaches one small topic at a time.
-You don’t have to ask:
-“What should I study next?”
-
-
-“Should I revise this?”
-
-
-“Am I ready to move on?”
-
-
-Orbit decides this for you.
-It explains a topic, then gives you a few questions or activities to check understanding.
-Based on how easily you answer, Orbit understands:
-what you are confident in
-
-
-what you partially understand
-
-
-what you are struggling with
-How Orbit adapts to you
-Orbit doesn’t just mark answers as right or wrong.
-It looks at how easily you got the answer:
-right on the first try → you understand well
-
-
-right after a few tries → you understand partially
-
-
-many mistakes → you need more practice
-
-
-Each small topic gets its own score.
-Using these scores, Orbit:
-spends more time on weak topics
-
-
-revises topics you struggle with
-
-
-moves faster through topics you already know
-
-
-This way, no time is wasted repeating things you already understand.
-How simulations are used
-Some topics are hard to understand with text alone  especially topics involving:
-movement
-
-
-change over time
-
-
-cause and effect
-
-
-When Orbit detects such a topic, it generates interactive simulations.
-These simulations let you:
-change values
-
-
-see what happens
-
-
-understand concepts visually and intuitively
-
-
-The simulations are created only when they are useful, not for every topic.
-Optional attention support using the camera
-Orbit can also use the camera only if you choose to allow it.
-It does not read thoughts or emotions.
-It only looks at simple signals such as:
-blinking too much (possible tiredness)
-
-
-looking away often
-
-
-being stuck or confused for a long time
-
-Looking like a retard ( orbit can’t solve this)
-
-
-
-Using these signals, Orbit may:
-slow down explanations
-
-
-repeat an idea differently
-
-
-suggest taking a short break
-
-
-All camera processing happens on your device, and nothing is saved.
-What makes Orbit different
-Orbit is not:
-a chatbot you keep prompting
-
-
-a static notes app
-
-
-a fixed online course
-
-
-Orbit is a guided learning system.
-It:
-decides what to teach next
-
-
-adapts based on your performance
-
-
-revises weak areas automatically
-
-
-adjusts learning speed to you
-
-
-So the student can focus on understanding, not planning.
-
-Why Orbit is not just another AI tutor
-Many AI learning apps today work like this:
-you upload notes, then chat with an AI that answers questions when you ask.
-Orbit is fundamentally different.
-Orbit does not wait for prompts.
-You don’t have to keep asking what to study or what to do next.
-
-
-Orbit does not respond randomly to questions.
-It follows a structured learning plan built from your material.
-
-
-Orbit does not teach everything at once.
-It breaks content into small, focused learning steps and guides you through them.
-
-
-Orbit does not rely only on conversation.
-It teaches, tests, revises, and adapts automatically in the background.
-
-
-Orbit does not act like a general-purpose AI.
-It stays strictly grounded in your uploaded content and syllabus.
-
-
-In short, Orbit is not an AI you talk to.
-It is a learning system that thinks ahead for you.
-
-
-
-
-
-
-Technical Details ( flexible maybe)
-FRONT-END => React (vite) , Tailwind , Typescript/Javascript.
-
-
-BACK-END => FastAPI (Python) [unstructured for file chunking]  ,DATABASE => PostgreSQL
-
-Tools => Git/Github , Postman
-
-HOSTING - Vercel & Render/Railway..
-
-
+# Orbit - AI-Powered Adaptive Learning Platform
+
+Orbit is an intelligent learning platform that transforms uploaded study materials into interactive, adaptive lessons with AI-generated content, simulations, and questions.
+
+## 🚀 Current Features
+
+### ✅ Document Processing & Curriculum Generation
+- Upload PDF, DOCX, and other document formats
+- Automatic curriculum extraction using Unstructured API
+- Hierarchical content organization: **Curriculums → Modules → Subtopics**
+- Each upload creates a separate curriculum
+- Content decomposition into structured learning units
+
+### ✅ AI-Powered Teaching Content
+- **Dual AI Model System**:
+  - Primary: Gemini 3 Flash Preview
+  - Fallback: Gemini 2.5 Flash (when quota exhausted)
+- **Automatic API Key Rotation**: Handles multiple API keys with 429 error detection
+- **Adaptive Content Generation**: Adjusts difficulty based on learner score (0-100)
+- **Content Types**:
+  - Paragraphs (explanatory text)
+  - Formulas (mathematical equations with explanations)
+  - Insights (key takeaways)
+  - Lists (structured information)
+  - **Interactive HTML Simulations** (with inline CSS/JS)
+  - Questions (MCQ and fill-in-blank)
+
+### ✅ Interactive Simulations
+- AI-generated HTML/CSS/JavaScript simulations
+- Proper script execution in React using custom `SimulationBlock` component
+- Real-time interactive visualizations
+- Stored in database for caching
+
+### ✅ Question & Scoring System
+- **Client-Side Attempt Tracking**
+- **Smart Feedback System**:
+  - Hints on wrong answers (attempts 1-3)
+  - Full explanation on 4th attempt or correct answer
+- **Automatic Scoring**:
+  - 1st attempt: 1.0 (100%)
+  - 2nd attempt: 0.75 (75%)
+  - 3rd attempt: 0.5 (50%)
+  - 4th+ attempt: 0.25 (25%)
+- Score calculation happens client-side, sent to backend when all questions complete
+- Subtopic score = average of all question scores (0-100 scale)
+- Auto-continue after correct answers (300ms delay)
+
+### ✅ Curriculum Management
+- **Database Schema**:
+  ```
+  users → curriculums → modules → subtopics
+  ```
+- Multiple curriculums per user
+- Progress tracking per subtopic
+- Score persistence in `subtopics.score`
+
+### ✅ Content Caching
+- Teaching blocks cached in `teaching_blocks` table (PostgreSQL JSONB)
+- Prevents redundant AI API calls
+- Instant content loading on revisits
+
+## 🛠️ Tech Stack
+
+### Backend
+- **Framework**: FastAPI (Python)
+- **Database**: PostgreSQL (Neon DB)
+- **ORM**: SQLAlchemy (raw SQL for performance)
+- **AI Services**:
+  - Google Gemini API (3-flash-preview, 2.5-flash)
+  - Unstructured API (document parsing)
+- **Validation**: Pydantic
+- **Environment**: python-dotenv
+
+### Frontend
+- **Framework**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **Routing**: React Router v6
+- **State Management**: @tanstack/react-query (for server state)
+- **Animations**: Framer Motion
+- **Styling**: CSS (custom design system)
+- **Icons**: Lucide React
+- **UI Utilities**: Custom component library
+
+### Infrastructure
+- **CORS**: Enabled for development
+- **API Architecture**: RESTful
+- **Caching Strategy**: Server-side (PostgreSQL) + Client-side (React Query)
+
+## 📁 Project Structure
+
+```
+Orbit/
+├── backend/
+│   ├── routes/               # API endpoints
+│   │   ├── parse.py         # Document upload & parsing
+│   │   ├── curriculum.py    # Curriculum fetching
+│   │   ├── teaching.py      # Teaching content generation
+│   │   ├── attempts.py      # Score updates
+│   │   └── users.py         # User management
+│   ├── services/
+│   │   ├── Gemini_Services/ # AI content generation
+│   │   │   ├── gemini_service.py      # Main generation logic
+│   │   │   ├── key_manager.py         # API key rotation
+│   │   │   └── teaching_prompt.py     # Prompts
+│   │   ├── db_services/     # Database operations
+│   │   │   ├── db.py        # Session management
+│   │   │   └── push_to_db.py # Curriculum upload
+│   │   ├── unstructured_service.py  # Document parsing
+│   │   └── manual_parsing.py        # Content extraction
+│   ├── config.py            # Environment config
+│   ├── main.py              # FastAPI app
+│   └── .env                 # API keys (not committed)
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── teaching/    # Teaching content components
+│   │   │   │   ├── TeachingCanvas.tsx    # Main content display
+│   │   │   │   ├── QuestionBlock.tsx     # Interactive questions
+│   │   │   │   ├── SimulationBlock.tsx   # HTML simulations
+│   │   │   │   └── AskAIChat.tsx         # AI chat feature
+│   │   │   ├── curriculum/  # Curriculum navigation
+│   │   │   └── layout/      # Layout components
+│   │   ├── pages/           # Route pages
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── lib/             # Utilities & API client
+│   │   ├── logic/           # Business logic
+│   │   └── types/           # TypeScript definitions
+│   └── index.html
+│
+└── README.md (this file)
+```
+
+## 🔑 Key Implementation Details
+
+### API Key Rotation System
+- Loads keys from environment: `GEMINI_API_KEY_1`, `_2`, `_3`...
+- Circular rotation on 429 errors
+- Tries each key once per request
+- Fails gracefully after exhausting all keys
+
+### Simulation Rendering
+- React's `dangerouslySetInnerHTML` blocks `<script>` execution
+- **Solution**: Custom `useEffect` hook that:
+  1. Sets HTML via `innerHTML`
+  2. Extracts all `<script>` tags
+  3. Creates new script elements to execute them
+  4. Properly cleans up on unmount
+
+### Score Calculation Flow
+1. User answers question → Client tracks attempts
+2. On correct answer → Calculate score based on attempt count
+3. When all questions complete → Calculate average
+4. Send final score to backend → Update `subtopics.score`
+
+### Content Generation Pipeline
+1. User selects subtopic
+2. Backend checks cache (`teaching_blocks` table)
+3. If not cached:
+   - Fetch subtopic content + nearby context
+   - Call Gemini with adaptive prompt
+   - Parse response into structured blocks
+   - Cache in database
+4. Return blocks to frontend
+
+## 📚 Documentation
+
+- `README_TDT.md` - Technical design document
+- `FEATURE_ORDER.md` - Feature implementation roadmap
+- `DOCS_OVERVIEW.md` - Documentation guide
+- `PROGRESS.md` - Development progress tracker
+
+## 🐛 Known Issues
+
+None currently! 🎉
+
+## 🔮 Next Steps
+
+See `FEATURE_ORDER.md` for the complete roadmap. Priority features:
+1. Camera-based engagement tracking
+2. Module unlocking system
+3. Skip subtopic feature
+4. Advanced analytics
+5. Production deployment
+
+## 📄 License
+
+Private project - All rights reserved
+
+---
+
+Built with ❤️ using AI-powered learning technology

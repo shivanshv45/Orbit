@@ -74,6 +74,14 @@ __pycache__/
 venv/
 
 # =========================
+# Documentation (internal planning)
+# =========================
+README_TDT.md
+IMPLEMENTATION_PLAN.md
+FEATURE_ORDER.md
+DOCS_OVERVIEW.md
+
+# =========================
 # Misc
 # =========================
 coverage/

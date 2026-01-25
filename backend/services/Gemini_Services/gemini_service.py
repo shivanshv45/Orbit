@@ -1,86 +1,59 @@
-import os
 from google import genai
-from pydantic import BaseModel,ValidationError,Field
-from typing import List,Union,Literal,Optional,Annotated
+from pydantic import BaseModel
+from typing import List, Union, Literal, Optional
+import json
+import traceback
 
 from services.Gemini_Services.teaching_prompt import teachingPrompt
+from services.Gemini_Services.key_manager import key_manager
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY not set")
-
-client=genai.Client(api_key=GEMINI_API_KEY);
-
-
-
-#Output Block Schema in Discriminated Union
 class Paragraph(BaseModel):
     type: Literal["paragraph"]
     content: str
-
 
 class Formula(BaseModel):
     type: Literal["formula"]
     formula: str
     explanation: str
 
+class Insight(BaseModel):
+    type: Literal["insight"]
+    content: str
+
+class ListBlock(BaseModel):
+    type: Literal["list"]
+    items: List[str]
 
 class Simulation(BaseModel):
     type: Literal["simulation"]
-    simulation_id: Literal[
-        "force_mass_acceleration",
-        "inertia_motion",
-        "action_reaction_pairs",
-    ]
-    learning_goal: str
+    html: str
+    description: str
 
+class QuestionExplanations(BaseModel):
+    correct: str
+    incorrect: Optional[List[str]] = None
 
-class ConceptCheck(BaseModel):
-    type: Literal["concept_check"]
+class Question(BaseModel):
+    type: Literal["question"]
+    questionType: Literal["mcq", "fill_in_blank"]
     question: str
-    expected_thinking: str
+    options: Optional[List[str]] = None
+    correctIndex: Optional[int] = None
+    correctAnswer: Optional[str] = None
+    explanations: QuestionExplanations
+    hint: str
 
-
-class Misconception(BaseModel):
-    type: Literal["misconception"]
-    belief: str
-    correction: str
-
-
-class Tips(BaseModel):
-    type: Literal["tip"]
-    content: str
-
-
-class QuizQuestion(BaseModel):
-    question: str
-    options: List[str]
-    correct_option_index: int
-    explanation: str
-
-
-class Quiz(BaseModel):
-    type: Literal["quiz"]
-    questions: List[QuizQuestion]
-
-TeachingBlock = Annotated[
-    Union[
-        Paragraph,
-        Formula,
-        Simulation,
-        ConceptCheck,
-        Misconception,
-        Tips,
-        Quiz,
-    ],
-    Field(discriminator="type"),
+TeachingBlock = Union[
+    Paragraph,
+    Formula,
+    Insight,
+    ListBlock,
+    Simulation,
+    Question,
 ]
-
 
 class TeachingResponse(BaseModel):
     blocks: List[TeachingBlock]
-
- #core gemini service
 
 def generate_teaching_blocks(
         lesson_title: str,
@@ -89,44 +62,105 @@ def generate_teaching_blocks(
         learner_score: int,
         nearby_context: str = "",
 ) -> TeachingResponse:
-    """
-    Converts trusted lesson content into structured teaching blocks.
-    """
+    print(f"[DEBUG] Generating blocks for: {subtopic_title}, score: {learner_score}")
+    
+    prompt = f"""
+{teachingPrompt}
 
-    user_prompt = f"""
-Lesson Title:
-{lesson_title}
+LESSON: {lesson_title}
+SUBTOPIC: {subtopic_title}
+LEARNER SCORE: {learner_score}
 
-Subtopic Title:
-{subtopic_title}
+CONTEXT (from nearby subtopics):
+{nearby_context[:500] if nearby_context else "None"}
 
-Lesson Content:
+CONTENT TO TEACH:
 {lesson_content}
 
-Nearby Context:
-{nearby_context}
-
-Learner Score:
-{learner_score}
+Generate structured teaching blocks as JSON array.
 """
-
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=user_prompt,
-        config={
-            "system_instruction": teachingPrompt,
-            "response_mime_type": "application/json",
-            "response_schema": TeachingResponse,
-            "temperature": 0.4, #stable and predictable
-        },
-    )
-
+    
+    def _call_content(api_key: str):
+        client = genai.Client(api_key=api_key)
+        
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": TeachingResponse,
+                "temperature": 1.0,
+            }
+        )
+        
+        return response.text
+    
     try:
-        teaching_data: TeachingResponse = response.parsed
-    except ValidationError as e:
-        raise ValueError("Invalid Gemini teaching output") from e
-
-    if not teaching_data.blocks:
-        raise ValueError("No teaching blocks generated")
-
-    return teaching_data
+        raw_response = key_manager.execute_with_retry(_call_content)
+        print(f"[DEBUG] Received response from Gemini")
+        
+        parsed = json.loads(raw_response)
+        result = TeachingResponse(**parsed)
+        
+        block_types = [block.type for block in result.blocks]
+        print(f"[DEBUG] Block types generated: {block_types}")
+        
+        for i, block in enumerate(result.blocks):
+            if isinstance(block, Simulation):
+                html = block.html.strip()
+                if html.startswith("```html"):
+                    html = html[7:]
+                if html.endswith("```"):
+                    html = html[:-3]
+                block.html = html.strip()
+                print(f"[DEBUG] Simulation block {i}: {len(block.html)} chars")
+                print(f"[DEBUG] First 300 chars: {block.html[:300]}")
+        
+        print(f"[DEBUG] Generated {len(result.blocks)} blocks successfully")
+        return result
+        
+    except Exception as e:
+        print(f"[ERROR] Generation failed with gemini-3-flash-preview: {str(e)}")
+        print(traceback.format_exc())
+        
+        print(f"[DEBUG] Retrying with gemini-2.5-flash fallback...")
+        
+        try:
+            def _call_fallback(api_key: str):
+                client = genai.Client(api_key=api_key)
+                
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config={
+                        "response_mime_type": "application/json",
+                        "response_schema": TeachingResponse,
+                        "temperature": 1.0,
+                    }
+                )
+                
+                return response.text
+            
+            raw_response = key_manager.execute_with_retry(_call_fallback)
+            print(f"[DEBUG] Fallback succeeded")
+            
+            parsed = json.loads(raw_response)
+            result = TeachingResponse(**parsed)
+            
+            for i, block in enumerate(result.blocks):
+                if isinstance(block, Simulation):
+                    html = block.html.strip()
+                    if html.startswith("```html"):
+                        html = html[7:]
+                    if html.endswith("```"):
+                        html = html[:-3]
+                    block.html = html.strip()
+                    print(f"[DEBUG] Simulation block {i}: {len(block.html)} chars")
+            
+            print(f"[DEBUG] Generated {len(result.blocks)} blocks with fallback")
+            return result
+            
+        except Exception as fallback_error:
+            print(f"[ERROR] Fallback also failed: {str(fallback_error)}")
+            print(traceback.format_exc())
+            raise
