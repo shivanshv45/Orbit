@@ -168,7 +168,33 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 </div>
             )}
 
+
             <AnimatePresence>
+                {showResult && !isCorrect && attemptCount < 4 && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
+                        exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="p-5 rounded-xl border-2 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-100 dark:bg-amber-900/30">
+                                    <Lightbulb className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="font-semibold mb-2 text-base text-amber-900 dark:text-amber-100">
+                                        Hint
+                                    </p>
+                                    <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+                                        {question.hint}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
                 {showResult && shouldShowExplanation && (
                     <motion.div
                         initial={{ opacity: 0, height: 0, marginBottom: 0 }}
@@ -209,6 +235,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                     </motion.div>
                 )}
             </AnimatePresence>
+
 
             <motion.div
                 initial={{ opacity: 0 }}

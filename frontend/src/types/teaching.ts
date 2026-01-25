@@ -38,6 +38,7 @@ export interface QuestionBlock {
     correctIndex?: number;
     correctAnswer?: string;
     explanations: QuestionExplanations;
+    hint: string;
 }
 
 export type TeachingBlock =

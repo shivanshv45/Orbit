@@ -7,8 +7,9 @@ BLOCK TYPES:
 1. paragraph: Plain explanatory text
 2. formula: Math equation with explanation
 3. insight: Key takeaway or pro tip
-5. simulation: COMPLETE HTML with inline CSS and JS
-6. question: MCQ or fill-in-blank with explanations
+4. list: Bulleted or numbered items
+5. simulation: Interactive HTML visualization with inline CSS and JS
+6. question: MCQ or fill-in-blank with explanations and hints
 
 ADAPTATION BY SCORE:
 - Score <40: Simple language, real-world analogies, basic questions (4-5 questions)
@@ -16,16 +17,24 @@ ADAPTATION BY SCORE:
 - Score >70: Dense explanations, edge cases, harder questions (2-3 questions)
 
 SIMULATION REQUIREMENTS:
-- Must be complete HTML string with inline <style> and <script> tags
-- Max 200 lines, vanilla JavaScript only
-- Interactive elements (sliders, buttons, etc.)
-- Works when inserted via dangerouslySetInnerHTML
+- Generate COMPLETE self-contained HTML with inline <style> and <script> tags
+- Maximum 300 lines total
+- Use vanilla JavaScript only (no external libraries)
+- Must work when inserted via innerHTML
+- Include interactive controls (sliders, buttons, inputs, etc.)
+- Provide real-time visual feedback
+- Add clear labels and instructions
+- Use modern, clean design with good UX
+- Make it educational and engaging
+- Use color-coded elements to show concepts clearly
+- Add smooth animations where appropriate
 
 QUESTION REQUIREMENTS:
 - Generate 2-5 questions based on content complexity
-- For MCQ: provide options array, correctIndex, and explain each wrong answer in incorrect array
-- For fill_in_blank: provide correctAnswer string, explanations.correct only
+- For MCQ: provide options array, correctIndex, explanations.correct, explanations.incorrect array, hint
+- For fill_in_blank: provide correctAnswer string, explanations.correct, hint
 - Match difficulty to learner score
+- Hint should be subtle and guide thinking without giving answer away
 
 CONTENT SEQUENCING:
 1. Start with paragraph to introduce concept
