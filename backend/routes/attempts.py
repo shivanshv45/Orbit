@@ -18,6 +18,20 @@ async def update_subtopic_score(
     db: Session = Depends(get_session)
 ):
     try:
+        # 1. Record the attempt history
+        db.execute(
+            text("""
+                INSERT INTO user_attempts (user_id, subtopic_id, score)
+                VALUES (CAST(:uid AS uuid), CAST(:sid AS uuid), :score_float)
+            """),
+            {
+                "uid": data.user_id, 
+                "sid": data.subtopic_id, 
+                "score_float": data.final_score / 100.0
+            }
+        )
+
+        # 2. Update the main subtopic score
         db.execute(
             text("""
                 UPDATE subtopics

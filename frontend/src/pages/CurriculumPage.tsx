@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Brain, ArrowRight, Loader2 } from 'lucide-react';
 import { CurriculumTree } from '@/components/curriculum/CurriculumTree';
@@ -7,7 +7,9 @@ import type { Module, Subtopic } from '@/types/curriculum';
 
 export default function CurriculumPage() {
   const navigate = useNavigate();
-  const { data, isLoading, error } = useCurriculum();
+  const [searchParams] = useSearchParams();
+  const curriculumId = searchParams.get('id') || undefined;
+  const { data, isLoading, error } = useCurriculum(curriculumId);
 
   const handleStartLesson = (subtopicId: string) => {
     navigate(`/learn/${subtopicId}`);

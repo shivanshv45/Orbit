@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from google import genai
+
 
 class GeminiKeyManager:
     def __init__(self):

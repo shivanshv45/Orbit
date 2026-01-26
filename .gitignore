@@ -91,3 +91,14 @@ coverage/
 A
 PROGRESS.md
 N/
+
+# =========================
+# Database Fix Scripts & Temp Files
+# =========================
+run_attempts_fix.py
+run_db_fix.py
+fix_camera_table.sql
+
+*.sql
+
+

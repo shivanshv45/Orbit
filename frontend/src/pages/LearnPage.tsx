@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Video, VideoOff } from 'lucide-react';
+import { CameraFeedback } from '@/components/teaching/CameraFeedback';
 import { TopicNavigator } from '@/components/layout/TopicNavigator';
 import { ProgressIndicator } from '@/components/layout/ProgressIndicator';
 import { TeachingCanvas } from '@/components/teaching/TeachingCanvas';
 import { useCurriculum } from '@/hooks/useCurriculum';
 import { useTeachingContent } from '@/hooks/useTeachingContent';
+import { useFaceTracking } from '@/hooks/useFaceTracking';
 import { createOrGetUser } from '@/logic/userSession';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -17,11 +19,22 @@ export default function LearnPage() {
   const { subtopicId } = useParams<{ subtopicId: string }>();
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const { uid } = createOrGetUser();
   const queryClient = useQueryClient();
 
   const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum();
   const { data: teachingData, isLoading: teachingLoading, error } = useTeachingContent(currentSubtopicId);
+
+  // Face tracking hook
+  const { isActive: cameraActive, currentMetrics } = useFaceTracking(currentSubtopicId, cameraEnabled);
+
+  // Log metrics for debugging
+  useEffect(() => {
+    if (cameraEnabled && currentMetrics) {
+      console.debug('[Camera Metrics]', currentMetrics);
+    }
+  }, [cameraEnabled, currentMetrics]);
 
   // Update current subtopic when URL changes
   useEffect(() => {
@@ -112,8 +125,27 @@ export default function LearnPage() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto p-8 pr-16">
+      <main className="flex-1 overflow-y-auto relative">
+        {/* Camera Toggle - Fixed Below Sidebar Toggle */}
+        <div className="fixed top-16 right-4 z-40 flex flex-col items-end gap-3">
+          <button
+            onClick={() => setCameraEnabled(!cameraEnabled)}
+            className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 shadow-sm hover:shadow-md"
+            title={cameraEnabled ? "Disable Focus Tracking" : "Enable Focus Tracking"}
+          >
+            {cameraEnabled ? (
+              <Video className="w-5 h-5 text-primary" />
+            ) : (
+              <VideoOff className="w-5 h-5" />
+            )}
+          </button>
+
+          {cameraEnabled && cameraActive && currentMetrics && (
+            <CameraFeedback metrics={currentMetrics} expanded={true} />
+          )}
+        </div>
+
+        <div className="max-w-3xl mx-auto p-8 pr-16 pt-16">
           {teachingLoading ? (
             <div className="flex items-center justify-center h-96">
               <div className="text-center">
