@@ -21,6 +21,8 @@ export default function LearnPage() {
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const { uid } = createOrGetUser();
+  // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
+  // Actually, wait, line 65 uses queryClient.prefetchQuery. So I need to import useQueryClient again.
   const queryClient = useQueryClient();
 
   const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum();
@@ -35,6 +37,42 @@ export default function LearnPage() {
       console.debug('[Camera Metrics]', currentMetrics);
     }
   }, [cameraEnabled, currentMetrics]);
+
+  // Calculate Stats locally from curriculum data
+  const calculateStreak = () => {
+    try {
+      const stored = localStorage.getItem('orbit_streak_data');
+      const today = new Date().toISOString().split('T')[0];
+
+      if (!stored) {
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: 1, lastDate: today }));
+        return 1;
+      }
+
+      const { count, lastDate } = JSON.parse(stored);
+
+      if (lastDate === today) return count;
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastDate === yesterdayStr) {
+        const newCount = count + 1;
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: newCount, lastDate: today }));
+        return newCount;
+      } else {
+        // Streak broken
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: 1, lastDate: today }));
+        return 1;
+      }
+    } catch (e) {
+      console.error("Streak calc error", e);
+      return 0;
+    }
+  };
+
+  const streak = calculateStreak();
 
   // Update current subtopic when URL changes
   useEffect(() => {
@@ -72,6 +110,9 @@ export default function LearnPage() {
   };
 
   const handleNext = () => {
+    // Invalidate curriculum query to update stats immediately
+    queryClient.invalidateQueries({ queryKey: ['curriculum'] });
+
     if (nextSubtopic) {
       handleSelectSubtopic(nextSubtopic.id);
     } else {
@@ -84,8 +125,22 @@ export default function LearnPage() {
   };
 
   // Calculate some stats for progress panel
-  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed').length;
-  const totalSubtopics = allSubtopics.length;
+  // Calculate some stats for progress panel
+  const completedSubtopicsFiltered = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
+  const lessonsCompleted = completedSubtopicsFiltered.length;
+  const totalLessons = allSubtopics.length;
+
+  const avgPracticeScore = completedSubtopicsFiltered.length > 0
+    ? Math.round(completedSubtopicsFiltered.reduce((acc: number, curr: Subtopic) => acc + (curr.score || 0), 0) / completedSubtopicsFiltered.length)
+    : 0;
+
+  const remainingLessons = totalLessons - lessonsCompleted;
+  const estimatedMinutes = remainingLessons * 15;
+  const estimatedHours = Math.floor(estimatedMinutes / 60);
+  const estimatedMins = estimatedMinutes % 60;
+  const estimatedTimeLeft = estimatedHours > 0 ? `${estimatedHours}h ${estimatedMins}m` : `${estimatedMins}m`;
+
+  const nextMilestoneTitle = allSubtopics.find((s: Subtopic) => s.status !== 'completed')?.title || "All Complete!";
 
   if (curriculumLoading) {
     return (
@@ -195,11 +250,12 @@ export default function LearnPage() {
 
       {/* Right Sidebar - Progress (Toggleable) */}
       <ProgressIndicator
-        streak={3}
-        lessonsCompleted={completedSubtopics}
-        totalLessons={totalSubtopics}
-        practiceScore={85}
-        estimatedTimeLeft="2h 15m"
+        streak={streak}
+        lessonsCompleted={lessonsCompleted}
+        totalLessons={totalLessons}
+        practiceScore={avgPracticeScore}
+        estimatedTimeLeft={estimatedTimeLeft}
+        nextMilestone={nextMilestoneTitle}
         isOpen={progressPanelOpen}
         onToggle={() => setProgressPanelOpen(!progressPanelOpen)}
       />

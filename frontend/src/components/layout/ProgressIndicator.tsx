@@ -8,6 +8,7 @@ interface ProgressIndicatorProps {
   totalLessons: number;
   practiceScore: number;
   estimatedTimeLeft: string;
+  nextMilestone?: string;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -18,10 +19,11 @@ export function ProgressIndicator({
   totalLessons,
   practiceScore,
   estimatedTimeLeft,
+  nextMilestone,
   isOpen,
   onToggle,
 }: ProgressIndicatorProps) {
-  const completionPercent = Math.round((lessonsCompleted / totalLessons) * 100);
+  const completionPercent = totalLessons > 0 ? Math.round((lessonsCompleted / totalLessons) * 100) : 0;
 
   return (
     <>
@@ -91,7 +93,7 @@ export function ProgressIndicator({
                       </linearGradient>
                     </defs>
                   </svg>
-                  
+
                   {/* Center content */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-2xl font-semibold text-foreground tabular-nums">
@@ -100,7 +102,7 @@ export function ProgressIndicator({
                     <span className="text-xs text-muted-foreground">Complete</span>
                   </div>
                 </div>
-                
+
                 <p className="text-sm text-muted-foreground mt-3">
                   {lessonsCompleted} of {totalLessons} lessons
                 </p>
@@ -149,16 +151,17 @@ export function ProgressIndicator({
                   <span className="text-sm font-medium text-foreground">Next Milestone</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Complete Newton's Second Law to unlock Applications
+                  {nextMilestone ? `Complete ${nextMilestone}` : "All milestones achieved!"}
                 </p>
-                <div className="mt-3 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: '60%' }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                    className="h-full rounded-full bg-primary"
-                  />
-                </div>
+                {nextMilestone && (
+                  <div className="mt-3 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: '0%' }}
+                      className="h-full rounded-full bg-primary"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

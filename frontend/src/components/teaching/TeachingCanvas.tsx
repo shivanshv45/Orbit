@@ -99,6 +99,7 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         return block.items.join(', ');
       case 'question':
         return block.question;
+
       default:
         return 'This section';
     }
@@ -156,6 +157,8 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         return (
           <SimulationBlock html={block.html} description={block.description} />
         );
+
+
 
       case 'question':
         return null;

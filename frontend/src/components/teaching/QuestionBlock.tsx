@@ -34,7 +34,11 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
         if (question.questionType === 'mcq') {
             correct = selectedAnswer === question.correctIndex;
         } else {
-            correct = fillInAnswer.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
+            const userAnswer = fillInAnswer.trim().toLowerCase();
+            const correctMain = question.correctAnswer?.toLowerCase();
+            const accepted = question.acceptedAnswers?.map(a => a.toLowerCase()) || [];
+
+            correct = userAnswer === correctMain || accepted.includes(userAnswer);
         }
 
         const newAttemptCount = attemptCount + 1;

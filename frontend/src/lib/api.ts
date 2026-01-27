@@ -61,4 +61,10 @@ export const api = {
         if (!res.ok) throw new Error('Failed to submit camera metrics');
         return res.json();
     },
+
+    getUserStats: async (userId: string) => {
+        const res = await fetch(`${API_BASE}/api/users/${userId}/stats`);
+        if (!res.ok) throw new Error('Failed to fetch user stats');
+        return res.json();
+    },
 };
