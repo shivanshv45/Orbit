@@ -5,6 +5,7 @@ import { Sparkles, BookOpen, Brain, Zap } from 'lucide-react';
 import { FileUploader } from '@/components/upload/FileUploader';
 import { CurriculumListModal } from '@/components/curriculum/CurriculumListModal';
 import { useCurriculums } from '@/hooks/useCurriculums';
+import { SolarSystemBackground } from '@/components/landing/SolarSystemBackground';
 const BASE_SCALE = 0.3;
 const features = [
   {
@@ -169,17 +170,19 @@ export default function LandingPage() {
               </div>
             </header>
 
-            <main className="pt-16">
+            <main className="pt-16 relative">
+              <SolarSystemBackground />
+
               {/* Hero Section */}
               <section className="relative overflow-hidden">
                 <div className="container mx-auto px-6 py-24 lg:py-32">
-                  <div className="max-w-3xl mx-auto text-center">
+                  <div className="max-w-3xl mx-auto text-center relative z-10">
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.6 }}
                     >
-                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm font-medium mb-6">
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm font-medium mb-6 backdrop-blur-sm">
                         <Sparkles className="w-4 h-4" />
                         AI-Guided Learning
                       </span>
@@ -193,14 +196,14 @@ export default function LandingPage() {
                     >
                       Upload everything.
                       <br />
-                      <span className="text-primary">We'll teach you.</span>
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">We'll teach you.</span>
                     </motion.h1>
 
                     <motion.p
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.6, delay: 0.2 }}
-                      className="text-lg text-muted-foreground max-w-xl mx-auto mb-10"
+                      className="text-lg text-muted-foreground/80 max-w-xl mx-auto mb-10"
                     >
                       Drop your PDFs, slides, notes, and questions. Our AI builds a personalized
                       learning path and teaches you without needing repeated prompts.
@@ -213,7 +216,7 @@ export default function LandingPage() {
                     >
                       <button
                         onClick={() => setShowUploader(true)}
-                        className="inline-flex items-center justify-center h-14 px-8 rounded-2xl bg-primary text-primary-foreground text-lg font-medium shadow-glow hover:shadow-glow-sm hover:scale-[1.02] transition-all duration-300"
+                        className="inline-flex items-center justify-center h-14 px-8 rounded-2xl bg-primary text-primary-foreground text-lg font-medium shadow-[0_0_20px_hsl(var(--primary)/0.3)] hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] hover:scale-[1.02] transition-all duration-300"
                       >
                         Start Learning Now
                       </button>
@@ -222,11 +225,6 @@ export default function LandingPage() {
                       </p>
                     </motion.div>
                   </div>
-                </div>
-
-                {/* Background gradient */}
-                <div className="absolute inset-0 -z-10 overflow-hidden">
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
                 </div>
               </section>
 

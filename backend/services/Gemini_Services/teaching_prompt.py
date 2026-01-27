@@ -27,6 +27,7 @@ SIMULATION REQUIREMENTS:
 - Provide real-time visual feedback.
 - Add clear labels and instructions.
 - Use modern, clean design with good UX.
+- OPTIMIZE FOR DARK MODE: Use light text/lines (e.g., #e2e8f0) and neon/vibrant accents on a transparent or dark background.
 - Make it educational and engaging.
 - Use color-coded elements to show concepts clearly.
 - Add smooth animations where appropriate.
