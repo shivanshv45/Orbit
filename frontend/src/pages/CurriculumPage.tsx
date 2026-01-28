@@ -48,6 +48,13 @@ export default function CurriculumPage() {
     .flatMap((m: Module) => m.subtopics)
     .find((s: Subtopic) => s.status !== 'completed');
 
+  const allSubtopics = modules.flatMap((m: Module) => m.subtopics);
+  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
+  const isFullyComplete = allSubtopics.length > 0 && completedSubtopics.length === allSubtopics.length;
+  const completionPercentage = allSubtopics.length > 0
+    ? Math.round((completedSubtopics.length / allSubtopics.length) * 100)
+    : 0;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
@@ -66,18 +73,44 @@ export default function CurriculumPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8 p-6 rounded-2xl bg-accent/50 border border-primary/20"
+            className={`mb-8 p-6 rounded-2xl border ${isFullyComplete
+                ? 'bg-complete/10 border-complete/30'
+                : 'bg-accent/50 border-primary/20'
+              }`}
           >
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
-                <Brain className="w-6 h-6 text-primary" />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isFullyComplete
+                  ? 'bg-complete/20'
+                  : 'bg-primary/20'
+                }`}>
+                {isFullyComplete ? (
+                  <svg className="w-6 h-6 text-complete" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                )}
               </div>
               <div className="flex-1">
-                <h2 className="font-medium text-foreground mb-1">Your learning path is ready</h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  The AI has analyzed your materials and created a structured curriculum.
-                  Topics are unlocked as you progress.
-                </p>
+                {isFullyComplete ? (
+                  <>
+                    <h2 className="font-medium text-complete mb-1">🎉 Congratulations!</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You've completed all {allSubtopics.length} lessons in this curriculum.
+                      Amazing work! Feel free to review any topic or upload new materials to continue learning.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="font-medium text-foreground mb-1">Ready to learn?</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Your study materials have been organized into {modules.length} module{modules.length !== 1 ? 's' : ''} with {allSubtopics.length} lesson{allSubtopics.length !== 1 ? 's' : ''}.
+                      {completionPercentage > 0 && ` You're ${completionPercentage}% complete!`}
+                    </p>
+                  </>
+                )}
                 {firstAvailableSubtopic && (
                   <button
                     onClick={() => handleStartLesson(firstAvailableSubtopic.id)}

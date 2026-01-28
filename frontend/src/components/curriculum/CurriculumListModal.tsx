@@ -97,16 +97,16 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
                                                 onClick={() => handleSelectCurriculum(curriculum.id)}
                                                 className="w-full p-5 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:bg-accent/30 transition-all duration-200 flex items-center justify-between group"
                                             >
-                                                <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-4 flex-1 min-w-0">
                                                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                                                         <BookOpen className="w-6 h-6 text-primary" />
                                                     </div>
-                                                    <div className="text-left">
-                                                        <h4 className="font-semibold text-foreground text-lg mb-1">
+                                                    <div className="text-left flex-1 min-w-0">
+                                                        <h4 className="font-semibold text-foreground text-lg mb-1 truncate">
                                                             {curriculum.title}
                                                         </h4>
                                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                            <Calendar className="w-4 h-4" />
+                                                            <Calendar className="w-4 h-4 flex-shrink-0" />
                                                             <span>Created {formatDate(curriculum.created_at)}</span>
                                                         </div>
                                                     </div>
