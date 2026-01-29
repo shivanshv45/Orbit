@@ -1,33 +1,34 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, BookOpen, Brain, Zap } from 'lucide-react';
 import { FileUploader } from '@/components/upload/FileUploader';
 import { CurriculumListModal } from '@/components/curriculum/CurriculumListModal';
 import { useCurriculums } from '@/hooks/useCurriculums';
 import { SolarSystemBackground } from '@/components/landing/SolarSystemBackground';
 import { AuthButton } from '@/components/auth/AuthButton';
+import { OrbitLogo } from '@/components/brand/OrbitLogo';
 const BASE_SCALE = 0.3;
 const features = [
   {
     icon: Sparkles,
-    title: 'AI-Powered Analysis',
-    description: 'Automatically breaks down any material into structured learning modules',
+    title: 'Instant Structure',
+    description: 'Raw documents become organized, bite-sized learning modules instantly',
   },
   {
     icon: BookOpen,
-    title: 'Adaptive Teaching',
-    description: 'The system guides you through concepts at your own pace',
+    title: 'Adaptive Pacing',
+    description: 'Content that evolves with your understanding, moving at your speed',
   },
   {
     icon: Brain,
-    title: 'Active Recall',
-    description: 'Built-in practice and spaced repetition for better retention',
+    title: 'Smart Retention',
+    description: 'Practice exactly what you need to review, right when it matters',
   },
   {
     icon: Zap,
-    title: 'Interactive Simulations',
-    description: 'Learn complex concepts through hands-on visualizations',
+    title: 'Interactive Visuals',
+    description: 'Grasp complex concepts through dynamic, hands-on simulations',
   },
 ];
 
@@ -155,12 +156,7 @@ export default function LandingPage() {
             {/* Header */}
             <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
               <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                    <Brain className="w-5 h-5 text-primary-foreground" />
-                  </div>
-                  <span className="font-semibold text-foreground">Orbit</span>
-                </div>
+                <OrbitLogo />
 
                 <div className="flex items-center gap-3">
                   <button
@@ -198,9 +194,9 @@ export default function LandingPage() {
                       transition={{ duration: 0.6, delay: 0.1 }}
                       className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-foreground leading-tight mb-6"
                     >
-                      Upload everything.
+                      Everything you need to learn.
                       <br />
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">We'll teach you.</span>
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">Nothing else.</span>
                     </motion.h1>
 
                     <motion.p
@@ -209,8 +205,7 @@ export default function LandingPage() {
                       transition={{ duration: 0.6, delay: 0.2 }}
                       className="text-lg text-muted-foreground/80 max-w-xl mx-auto mb-10"
                     >
-                      Drop your PDFs, slides, notes, and questions. Our AI builds a personalized
-                      learning path and teaches you without needing repeated prompts.
+                      Simply upload your materials. Orbit organizes them into interactive lessons, simulations, and quizzes, adapting to your pace so you can focus on truly understanding.
                     </motion.p>
 
                     <motion.div
@@ -249,7 +244,7 @@ export default function LandingPage() {
                       <div>
                         <h2 className="text-2xl font-semibold text-foreground">Upload your materials</h2>
                         <p className="text-muted-foreground mt-1">
-                          The AI will analyze and structure your learning path
+                          Orbit will analyze and structure your learning path
                         </p>
                       </div>
                       <button
@@ -271,10 +266,10 @@ export default function LandingPage() {
                 <div className="container mx-auto px-6">
                   <div className="text-center mb-16">
                     <h2 className="text-3xl font-semibold text-foreground mb-4">
-                      Learning, reimagined
+                      The future of study
                     </h2>
                     <p className="text-muted-foreground max-w-xl mx-auto">
-                      Stop wondering what to study next. Let the AI guide your learning journey.
+                      Stop scrolling through static PDFs. Start interacting with ideas.
                     </p>
                   </div>
 
@@ -306,7 +301,7 @@ export default function LandingPage() {
                       Ready to learn smarter?
                     </h2>
                     <p className="text-muted-foreground mb-8">
-                      Upload your study materials and let the AI create your personalized learning experience.
+                      Upload your study materials and let Orbit create your personalized learning experience.
                     </p>
                     <button
                       onClick={() => setShowUploader(true)}
