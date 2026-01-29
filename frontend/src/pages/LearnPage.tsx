@@ -13,6 +13,7 @@ import { createOrGetUser } from '@/logic/userSession';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Module, Subtopic } from '@/types/curriculum';
+import { useUser } from '@clerk/clerk-react';
 
 export default function LearnPage() {
   const navigate = useNavigate();
@@ -20,7 +21,8 @@ export default function LearnPage() {
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const { uid } = createOrGetUser();
+  const { user } = useUser();
+  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null);
   // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
   // Actually, wait, line 65 uses queryClient.prefetchQuery. So I need to import useQueryClient again.
   const queryClient = useQueryClient();

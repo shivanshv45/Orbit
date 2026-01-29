@@ -22,6 +22,7 @@ SIMULATION REQUIREMENTS:
 - Generate COMPLETE, FULLY FUNCTIONAL self-contained HTML with inline <style> and <script> tags.
 - Maximum 300 lines total.
 - Use vanilla JavaScript only (no external libraries).
+- **CRITICAL**: Wrap ALL JavaScript code inside an IIFE to prevent variable collisions: `(function() { /* your code */ })();`
 - Must work when inserted via innerHTML.
 - Include interactive controls (sliders, buttons, inputs, etc.)
 - Provide real-time visual feedback.

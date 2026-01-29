@@ -16,7 +16,7 @@ async def get_teaching_content(
 ):
     try:
         cached = db.execute(
-            text("SELECT blocks_json FROM teaching_blocks WHERE subtopic_id = CAST(:sid AS uuid)"),
+            text("SELECT blocks_json FROM teaching_blocks WHERE subtopic_id = :sid"),
             {"sid": subtopic_id}
         ).fetchone()
         
@@ -30,7 +30,7 @@ async def get_teaching_content(
             }
         
         subtopic = db.execute(
-            text("SELECT title, content, score FROM subtopics WHERE id = CAST(:sid AS uuid)"),
+            text("SELECT title, content, score FROM subtopics WHERE id = :sid"),
             {"sid": subtopic_id}
         ).fetchone()
         
@@ -41,8 +41,8 @@ async def get_teaching_content(
             text("""
                 SELECT AVG(score) * 100 as avg_score
                 FROM user_attempts
-                WHERE user_id = CAST(:uid AS uuid)
-                  AND subtopic_id = CAST(:sid AS uuid)
+                WHERE user_id = :uid
+                  AND subtopic_id = :sid
             """),
             {"uid": user_id, "sid": subtopic_id}
         ).fetchone()
@@ -67,7 +67,7 @@ async def get_teaching_content(
         db.execute(
             text("""
                 INSERT INTO teaching_blocks (subtopic_id, blocks_json)
-                VALUES (CAST(:sid AS uuid), CAST(:blocks AS jsonb))
+                VALUES (:sid, CAST(:blocks AS jsonb))
             """),
             {"sid": subtopic_id, "blocks": blocks_json}
         )

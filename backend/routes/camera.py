@@ -36,7 +36,7 @@ async def submit_camera_metrics(
                     engagement, frustration, blink_rate,
                     head_stability, engagement_score
                 ) VALUES (
-                    CAST(:user_id AS uuid), CAST(:subtopic_id AS uuid), :session_duration,
+                    :user_id, :subtopic_id, :session_duration,
                     :focus_score, :confusion_level, :fatigue_score,
                     :engagement, :frustration, :blink_rate,
                     :head_stability, :engagement_score
@@ -80,7 +80,7 @@ def update_subtopic_score_with_camera(db: Session, subtopic_id: str):
         text("""
             SELECT AVG(score) * 100 as avg_score
             FROM user_attempts
-            WHERE subtopic_id = CAST(:sid AS uuid)
+            WHERE subtopic_id = :sid
         """),
         {"sid": subtopic_id}
     ).fetchone()
@@ -92,7 +92,7 @@ def update_subtopic_score_with_camera(db: Session, subtopic_id: str):
         text("""
             SELECT AVG(engagement_score) as avg_engagement
             FROM camera_metrics
-            WHERE subtopic_id = CAST(:sid AS uuid)
+            WHERE subtopic_id = :sid
         """),
         {"sid": subtopic_id}
     ).fetchone()
@@ -122,7 +122,7 @@ def update_subtopic_score_with_camera(db: Session, subtopic_id: str):
             final_score = 0
 
     db.execute(
-        text("UPDATE subtopics SET score = :score WHERE id = CAST(:sid AS uuid)"),
+        text("UPDATE subtopics SET score = :score WHERE id = :sid"),
         {"score": final_score, "sid": subtopic_id}
     )
     db.commit()
@@ -148,7 +148,7 @@ async def get_camera_stats(
                 AVG(frustration) as avg_frustration,
                 AVG(engagement_score) as avg_engagement_score
             FROM camera_metrics
-            WHERE subtopic_id = CAST(:sid AS uuid)
+            WHERE subtopic_id = :sid
         """),
         {"sid": subtopic_id}
     ).fetchone()

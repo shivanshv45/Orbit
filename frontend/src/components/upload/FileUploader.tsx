@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, Presentation, Image, FileSpreadsheet, X, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createOrGetUser } from '@/logic/userSession';
+import { useUser } from '@clerk/clerk-react';
 
 interface UploadedFile {
   id: string;
@@ -23,12 +24,13 @@ const fileTypeConfig = {
 };
 
 interface FileUploaderProps {
-  onFilesReady: () => void;
+  onUploadComplete: () => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-export function FileUploader({ onFilesReady }: FileUploaderProps) {
+export function FileUploader({ onUploadComplete }: FileUploaderProps) {
+  const { user } = useUser();
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -52,7 +54,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
 
   const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
-    
+
     const fileArray = Array.from(selectedFiles);
     const newFiles: UploadedFile[] = fileArray.map((file, index) => ({
       id: `file-${Date.now()}-${index}`,
@@ -62,7 +64,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
       status: 'uploading' as const,
       file: file,
     }));
-    
+
     setFiles(prev => [...prev, ...newFiles]);
   }, []);
 
@@ -92,30 +94,30 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
 
   const handleStartLearning = async () => {
     if (files.length === 0) return;
-    
+
     setIsProcessing(true);
-    
+
     const filesToUpload = files.filter(f => f.status === 'uploading' || f.status === 'ready' || f.status === 'processing');
-    
+
     if (filesToUpload.length === 0) {
       setIsProcessing(false);
       return;
     }
-    
-    setFiles(prev => prev.map(f => 
-      filesToUpload.some(fu => fu.id === f.id) 
+
+    setFiles(prev => prev.map(f =>
+      filesToUpload.some(fu => fu.id === f.id)
         ? { ...f, status: 'processing' as const }
         : f
     ));
-    
+
     try {
-      const userSession = createOrGetUser();
+      const userSession = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null);
       const formData = new FormData();
-      
+
       filesToUpload.forEach(fileObj => {
         formData.append('files', fileObj.file);
       });
-      
+
       const response = await fetch(`${API_BASE_URL}/parse`, {
         method: 'POST',
         headers: {
@@ -124,22 +126,22 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
         },
         body: formData,
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to parse files: ${errorText}`);
       }
-      
+
       const result = await response.json();
-      
+
       setFiles(prev => prev.map(f => ({ ...f, status: 'ready' as const })));
-      
+
       setTimeout(() => {
-        onFilesReady();
+        onUploadComplete();
       }, 500);
     } catch (error) {
       console.error('Error uploading files:', error);
-      setFiles(prev => prev.map(f => 
+      setFiles(prev => prev.map(f =>
         filesToUpload.some(fu => fu.id === f.id)
           ? { ...f, status: 'uploading' as const }
           : f
@@ -180,7 +182,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
           >
             <Upload className="w-8 h-8 text-primary" />
           </motion.div>
-          
+
           <div className="space-y-2">
             <h3 className="text-lg font-medium text-foreground">
               Upload everything you have
@@ -197,8 +199,8 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
 
         {/* Animated border gradient */}
         <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 via-transparent to-primary/20 animate-shimmer" 
-               style={{ backgroundSize: '200% 100%' }} />
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 via-transparent to-primary/20 animate-shimmer"
+            style={{ backgroundSize: '200% 100%' }} />
         </div>
       </motion.div>
 
@@ -231,7 +233,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
               {files.map((file, index) => {
                 const config = fileTypeConfig[file.type];
                 const Icon = config.icon;
-                
+
                 return (
                   <motion.div
                     key={file.id}
@@ -244,7 +246,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
                     <div className={cn("p-2 rounded-lg bg-muted", config.color)}>
                       <Icon className="w-4 h-4" />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
                         {file.name}
@@ -259,7 +261,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
                         <span className="text-xs text-muted-foreground">Uploading...</span>
                       )}
                       {file.status === 'processing' && (
-                        <motion.span 
+                        <motion.span
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           className="flex items-center gap-1.5 text-xs text-primary"
@@ -277,7 +279,7 @@ export function FileUploader({ onFilesReady }: FileUploaderProps) {
                           <Check className="w-3 h-3 text-complete" />
                         </motion.span>
                       )}
-                      
+
                       <button
                         onClick={() => removeFile(file.id)}
                         className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all"

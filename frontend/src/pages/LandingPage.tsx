@@ -6,6 +6,7 @@ import { FileUploader } from '@/components/upload/FileUploader';
 import { CurriculumListModal } from '@/components/curriculum/CurriculumListModal';
 import { useCurriculums } from '@/hooks/useCurriculums';
 import { SolarSystemBackground } from '@/components/landing/SolarSystemBackground';
+import { AuthButton } from '@/components/auth/AuthButton';
 const BASE_SCALE = 0.3;
 const features = [
   {
@@ -161,12 +162,15 @@ export default function LandingPage() {
                   <span className="font-semibold text-foreground">Orbit</span>
                 </div>
 
-                <button
-                  onClick={() => setShowCurriculumModal(true)}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Your Curriculums
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowCurriculumModal(true)}
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Your Curriculums
+                  </button>
+                  <AuthButton />
+                </div>
               </div>
             </header>
 
@@ -257,7 +261,7 @@ export default function LandingPage() {
                       </button>
                     </div>
 
-                    <FileUploader onFilesReady={handleFilesReady} />
+                    <FileUploader onUploadComplete={handleFilesReady} />
                   </motion.div>
                 </motion.div>
               )}

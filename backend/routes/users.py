@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api", tags=["Users"])
 class CreateUserRequest(BaseModel):
     id: str
     name: str
+    is_guest: bool = False
 
 class UserStats(BaseModel):
     streak: int
@@ -25,7 +26,7 @@ async def create_user(
 ):
     try:
         existing = db.execute(
-            text("SELECT id FROM users WHERE id = CAST(:uid AS uuid)"),
+            text("SELECT id FROM users WHERE id = :uid"),
             {"uid": user.id}
         ).fetchone()
         
@@ -33,7 +34,7 @@ async def create_user(
             return {"message": "User already exists", "id": user.id}
         
         db.execute(
-            text("INSERT INTO users (id, name) VALUES (CAST(:uid AS uuid), :name)"),
+            text("INSERT INTO users (id, name) VALUES (:uid, :name)"),
             {"uid": user.id, "name": user.name}
         )
         db.commit()
@@ -65,7 +66,7 @@ async def get_user_stats(
             text("""
                 SELECT COUNT(DISTINCT subtopic_id) as count 
                 FROM user_attempts 
-                WHERE user_id = CAST(:uid AS uuid) 
+                WHERE user_id = :uid 
                 AND score >= 0.7  -- Assuming 70% passing
             """),
             {"uid": user_id}
@@ -81,7 +82,7 @@ async def get_user_stats(
             text("""
                 SELECT AVG(score) as avg_score 
                 FROM user_attempts 
-                WHERE user_id = CAST(:uid AS uuid)
+                WHERE user_id = :uid
             """),
             {"uid": user_id}
         ).fetchone()
@@ -95,7 +96,7 @@ async def get_user_stats(
                 text("""
                     SELECT DISTINCT DATE(created_at) as attempt_date 
                     FROM user_attempts 
-                    WHERE user_id = CAST(:uid AS uuid) 
+                    WHERE user_id = :uid 
                     ORDER BY attempt_date DESC
                 """),
                 {"uid": user_id}

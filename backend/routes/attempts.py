@@ -22,7 +22,7 @@ async def update_subtopic_score(
         db.execute(
             text("""
                 INSERT INTO user_attempts (user_id, subtopic_id, score)
-                VALUES (CAST(:uid AS uuid), CAST(:sid AS uuid), :score_float)
+                VALUES (:uid, :sid, :score_float)
             """),
             {
                 "uid": data.user_id, 
@@ -36,7 +36,7 @@ async def update_subtopic_score(
             text("""
                 UPDATE subtopics
                 SET score = :score
-                WHERE id = CAST(:sid AS uuid)
+                WHERE id = :sid
             """),
             {"sid": data.subtopic_id, "score": data.final_score}
         )
