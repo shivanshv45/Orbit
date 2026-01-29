@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Stars, Float, PerspectiveCamera } from '@react-three/drei';
+import { Stars, Float, PerspectiveCamera, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 
 function Planet({ position, size, color, ringColor, hasRings = false, rotationSpeed = 0.01 }: { position: [number, number, number], size: number, color: string, ringColor?: string, hasRings?: boolean, rotationSpeed?: number }) {
@@ -14,25 +14,36 @@ function Planet({ position, size, color, ringColor, hasRings = false, rotationSp
 
     return (
         <group position={position}>
-            {/* */}
+            {/* Main Planet Sphere */}
             <mesh ref={meshRef}>
                 <sphereGeometry args={[size, 64, 64]} />
                 <meshStandardMaterial
                     color={color}
-                    roughness={0.3}
+                    roughness={0.7} // More matte, realistic surface
                     metalness={0.2}
-                    emissive={color}
-                    emissiveIntensity={0.1}
+                // Removed emissive to stop "vague" flat look; relies on sun light now
                 />
             </mesh>
 
-            {/* Atmospheric Glow */}
-            <mesh scale={[1.2, 1.2, 1.2]}>
+            {/* Inner Atmosphere (Rim Light) */}
+            <mesh scale={[1.1, 1.1, 1.1]}>
                 <sphereGeometry args={[size, 32, 32]} />
                 <meshBasicMaterial
                     color={color}
                     transparent
-                    opacity={0.15}
+                    opacity={0.3}
+                    side={THREE.BackSide}
+                    blending={THREE.AdditiveBlending}
+                />
+            </mesh>
+
+            {/* Outer Atmosphere Glow (Soft Gradient) */}
+            <mesh scale={[1.4, 1.4, 1.4]}>
+                <sphereGeometry args={[size, 32, 32]} />
+                <meshBasicMaterial
+                    color={color}
+                    transparent
+                    opacity={0.1}
                     side={THREE.BackSide}
                     blending={THREE.AdditiveBlending}
                 />
@@ -41,12 +52,13 @@ function Planet({ position, size, color, ringColor, hasRings = false, rotationSp
             {/* Optional Rings */}
             {hasRings && ringColor && (
                 <mesh rotation={[Math.PI / 3, 0, 0]}>
-                    <ringGeometry args={[size * 1.4, size * 2.2, 64]} />
+                    <ringGeometry args={[size * 1.5, size * 2.5, 64]} />
                     <meshBasicMaterial
                         color={ringColor}
                         side={THREE.DoubleSide}
                         transparent
-                        opacity={0.4}
+                        opacity={0.5}
+                        blending={THREE.AdditiveBlending}
                     />
                 </mesh>
             )}
@@ -54,6 +66,7 @@ function Planet({ position, size, color, ringColor, hasRings = false, rotationSp
     );
 }
 
+// ... ParticleRing stays the same ...
 function ParticleRing({ count = 100, radius = 20, color = '#6366f1', size = 0.5, speed = 0.1 }) {
     const points = useMemo(() => {
         const p = new Float32Array(count * 3);
@@ -114,7 +127,7 @@ function GlowingSun() {
                 />
             </mesh>
 
-            {/* Inner Corona (Pulsing Layer 1) */}
+            {/* Inner Corona */}
             <mesh scale={[1.1, 1.1, 1.1]}>
                 <sphereGeometry args={[2.5, 32, 32]} />
                 <meshBasicMaterial
@@ -125,7 +138,7 @@ function GlowingSun() {
                 />
             </mesh>
 
-            {/* Outer Corona Halo (Soft Glow) */}
+            {/* Outer Corona Halo */}
             <mesh scale={[1.6, 1.6, 1.6]}>
                 <sphereGeometry args={[2.5, 32, 32]} />
                 <meshBasicMaterial
@@ -137,8 +150,9 @@ function GlowingSun() {
                 />
             </mesh>
 
-            {/* Far reaching light */}
-            <pointLight distance={100} intensity={5} color="#818cf8" decay={1.5} />
+            {/* Stronger Light Source for Planets */}
+            <pointLight distance={100} intensity={3} color="#ffffff" decay={0.5} />
+            <ambientLight intensity={0.2} />
         </group>
     )
 }
@@ -159,41 +173,41 @@ function Scene() {
     return (
         <>
             <PerspectiveCamera makeDefault position={[0, -2, 20]} fov={60} />
-            <ambientLight intensity={0.1} />
 
-            {/* Original Star Config for Depth */}
+            {/* Stars & Sparkles for depth and glow */}
             <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+            <Sparkles count={150} scale={25} size={3} speed={0.4} opacity={0.5} color="#c7d2fe" />
 
             <group rotation={[Math.PI / 6, 0, 0]}>
                 <GlowingSun />
-                {/* RESTORED fast, distinct rings */}
+
+                {/* Orbital Rings */}
                 <ParticleRing count={200} radius={8} color="#a78bfa" size={0.1} speed={2} />
                 <ParticleRing count={300} radius={12} color="#818cf8" size={0.15} speed={1.5} />
                 <ParticleRing count={500} radius={18} color="#2dd4bf" size={0.1} speed={1} />
 
-                {/* UPGRADED Planets replacing simple spheres */}
-                <Float speed={1.5} rotationIntensity={0.5} floatIntensity={1}>
+                {/* Planets with enhanced realism */}
+                <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
                     <Planet
                         position={[10, 0, 5]}
-                        size={1.2}
-                        color="#c084fc"
+                        size={1.3}
+                        color="#a855f7" // Rich Purple
                         hasRings
-                        ringColor="#e879f9"
+                        ringColor="#f0abfc"
                     />
                 </Float>
-                <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
+                <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
                     <Planet
                         position={[-12, 2, -4]}
-                        size={1.0}
-                        color="#2dd4bf"
+                        size={1.1}
+                        color="#14b8a6" // Teal
                     />
                 </Float>
-                {/* Added third planet for balance */}
-                <Float speed={1} rotationIntensity={0.2} floatIntensity={0.5}>
+                <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
                     <Planet
                         position={[12, -8, -10]}
-                        size={0.6}
-                        color="#38bdf8"
+                        size={0.8}
+                        color="#0ea5e9" // Sky Blue
                     />
                 </Float>
             </group>
