@@ -14,7 +14,7 @@ async def get_user_curriculums(
         text("""
             SELECT id, title, created_at
             FROM curriculums
-            WHERE user_id = CAST(:uid AS uuid)
+            WHERE user_id = :uid
             ORDER BY created_at DESC
         """),
         {"uid": user_id}
@@ -43,7 +43,7 @@ async def get_curriculum(
         latest = db.execute(
             text("""
                 SELECT id FROM curriculums
-                WHERE user_id = CAST(:uid AS uuid)
+                WHERE user_id = :uid
                 ORDER BY created_at DESC
                 LIMIT 1
             """),
@@ -59,7 +59,7 @@ async def get_curriculum(
         text("""
             SELECT m.id, m.title, m.position
             FROM modules m
-            WHERE m.curriculum_id = CAST(:cid AS uuid)
+            WHERE m.curriculum_id = :cid
             ORDER BY m.position
         """),
         {"cid": target_id}
@@ -71,7 +71,7 @@ async def get_curriculum(
             text("""
                 SELECT id, title, score, position
                 FROM subtopics
-                WHERE module_id = CAST(:mid AS uuid)
+                WHERE module_id = :mid
                 ORDER BY position
             """),
             {"mid": str(module.id)}

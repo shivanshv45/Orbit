@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from google import genai
+
 
 class GeminiKeyManager:
     def __init__(self):
@@ -29,7 +29,10 @@ class GeminiKeyManager:
         if not keys:
             raise ValueError("No GEMINI_API_KEY found in environment")
         
-        return keys
+        # Deduplicate keys
+        unique_keys = list(set(keys))
+        print(f"[DEBUG] Loaded {len(unique_keys)} unique Gemini API keys")
+        return unique_keys
     
     def get_next_key(self) -> str:
         if not self.keys:

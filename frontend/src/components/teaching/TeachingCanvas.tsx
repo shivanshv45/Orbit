@@ -19,6 +19,7 @@ interface TeachingCanvasProps {
 export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: TeachingCanvasProps) {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [askAIOpen, setAskAIOpen] = useState<number | null>(null);
+  const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
   const [questionAnswered, setQuestionAnswered] = useState<Record<number, boolean>>({});
   const [questionScores, setQuestionScores] = useState<Record<number, number>>({});
   const { uid } = createOrGetUser();
@@ -99,9 +100,28 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         return block.items.join(', ');
       case 'question':
         return block.question;
+
       default:
         return 'This section';
     }
+  };
+
+  const renderMarkdownContent = (content: string) => {
+    // Split by **text** pattern
+    const parts = content.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        // Remove ** and style as bold purple
+        const text = part.slice(2, -2);
+        return (
+          <strong key={index} className="font-semibold text-primary">
+            {text}
+          </strong>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
   };
 
   const renderBlock = (block: TeachingBlock) => {
@@ -109,31 +129,42 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
       case 'paragraph':
         return (
           <p className="text-foreground leading-relaxed text-lg">
-            {block.content}
+            {renderMarkdownContent(block.content)}
           </p>
         );
 
       case 'formula':
+        // Calculate responsive styling based on formula length
+        const formulaLength = block.formula?.length || 0;
+        const isLongFormula = formulaLength > 50;
+        const isVeryLongFormula = formulaLength > 80;
+
         return (
-          <div className="my-6 p-8 rounded-2xl bg-accent/50 border border-primary/20 text-center">
-            <div className="text-4xl font-serif text-foreground mb-2">
+          <div className={cn(
+            "my-6 rounded-2xl bg-accent/50 border border-primary/20 text-center transition-all",
+            isVeryLongFormula ? "p-6 w-full" : isLongFormula ? "p-8 max-w-4xl mx-auto" : "p-8 max-w-2xl mx-auto"
+          )}>
+            <div className={cn(
+              "font-serif text-foreground mb-2 break-words leading-relaxed",
+              isVeryLongFormula ? "text-xl md:text-2xl px-4" : isLongFormula ? "text-2xl md:text-3xl" : "text-4xl"
+            )}>
               {block.formula}
             </div>
             {block.explanation && (
-              <p className="text-sm text-muted-foreground">{block.explanation}</p>
+              <p className="text-sm text-muted-foreground mt-4 px-4">{block.explanation}</p>
             )}
           </div>
         );
 
       case 'insight':
         return (
-          <div className="flex gap-4 p-5 rounded-2xl bg-success/10 border border-success/20">
-            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
-              <Lightbulb className="w-5 h-5 text-success" />
+          <div className="flex gap-4 p-5 rounded-2xl bg-yellow-500/10 border border-yellow-500/30">
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+              <Lightbulb className="w-5 h-5 text-yellow-500" />
             </div>
             <div>
-              <p className="font-medium text-foreground mb-1">Key Insight</p>
-              <p className="text-muted-foreground">{block.content}</p>
+              <p className="font-semibold text-yellow-500 mb-1">Key Insight</p>
+              <p className="text-foreground">{renderMarkdownContent(block.content)}</p>
             </div>
           </div>
         );
@@ -146,7 +177,7 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
                 <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0 mt-0.5">
                   {i + 1}
                 </span>
-                <span className="text-foreground">{item}</span>
+                <span className="text-foreground">{renderMarkdownContent(item)}</span>
               </li>
             ))}
           </ul>
@@ -156,6 +187,8 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         return (
           <SimulationBlock html={block.html} description={block.description} />
         );
+
+
 
       case 'question':
         return null;
@@ -194,10 +227,12 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index === currentChunkIndex ? 0.1 : 0 }}
               className="relative"
+              onMouseEnter={() => setHoveredBlock(index)}
+              onMouseLeave={() => setHoveredBlock(null)}
             >
               <div className={cn(
                 "transition-opacity duration-300",
-                index < currentChunkIndex ? "opacity-60" : "opacity-100"
+                index < currentChunkIndex ? "opacity-60 hover:opacity-100" : "opacity-100"
               )}>
                 {block.type === 'question' ? (
                   <QuestionBlock
@@ -210,11 +245,12 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
                 )}
               </div>
 
-              {index === currentChunkIndex && block.type !== 'question' && (
+              {(index === currentChunkIndex || hoveredBlock === index) && block.type !== 'question' && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                   className="mt-3"
                 >
                   <button

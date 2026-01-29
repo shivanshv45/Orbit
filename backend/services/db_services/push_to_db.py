@@ -11,7 +11,7 @@ def user_exist(
     db.execute(
         text("""
              INSERT INTO users (id, name, created_at)
-             VALUES (CAST(:id AS uuid), :name, :created_at)
+             VALUES (:id, :name, :created_at)
                  ON CONFLICT (id) DO NOTHING
              """),
         {
@@ -32,7 +32,7 @@ def upload_to_db(
         dbstuf.execute(
             text("""
                 INSERT INTO curriculums (id, user_id, title, created_at)
-                VALUES (CAST(:id AS uuid), CAST(:user_id AS uuid), :title, :created_at)
+                VALUES (:id, :user_id, :title, :created_at)
             """),
             {
                 "id": curriculum_id,
@@ -77,7 +77,7 @@ def upload_to_db(
             dbstuf.execute(
                 text("""
                      INSERT INTO modules (id, curriculum_id, title, position, created_at)
-                     VALUES (CAST(:id AS uuid), CAST(:curriculum_id AS uuid), :title, :position, :created_at)
+                     VALUES (:id, :curriculum_id, :title, :position, :created_at)
                      """),
                 {
                     "id": module_id,
@@ -97,7 +97,7 @@ def upload_to_db(
                              score, position, created_at
                          )
                          VALUES (
-                                    CAST(:id AS uuid), CAST(:module_id AS uuid), :title, :content,
+                                    :id, :module_id, :title, :content,
                                     :score, :position, :created_at
                                 )
                          """),

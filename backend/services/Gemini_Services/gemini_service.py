@@ -3,9 +3,19 @@ from pydantic import BaseModel
 from typing import List, Union, Literal, Optional
 import json
 import traceback
+import os
+import uuid
+import base64
+from pathlib import Path
+
+
 
 from services.Gemini_Services.teaching_prompt import teachingPrompt
 from services.Gemini_Services.key_manager import key_manager
+from services.db_services.db import get_session
+
+GENERATED_DIR = Path(r"c:\Users\shivanshverma\Desktop\Orbit\frontend\public\generated")
+GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 class Paragraph(BaseModel):
     type: Literal["paragraph"]
@@ -29,6 +39,8 @@ class Simulation(BaseModel):
     html: str
     description: str
 
+
+
 class QuestionExplanations(BaseModel):
     correct: str
     incorrect: Optional[List[str]] = None
@@ -40,6 +52,7 @@ class Question(BaseModel):
     options: Optional[List[str]] = None
     correctIndex: Optional[int] = None
     correctAnswer: Optional[str] = None
+    acceptedAnswers: Optional[List[str]] = None
     explanations: QuestionExplanations
     hint: str
 
@@ -55,6 +68,8 @@ TeachingBlock = Union[
 class TeachingResponse(BaseModel):
     blocks: List[TeachingBlock]
 
+
+
 def generate_teaching_blocks(
         lesson_title: str,
         subtopic_title: str,
@@ -62,7 +77,7 @@ def generate_teaching_blocks(
         learner_score: int,
         nearby_context: str = "",
 ) -> TeachingResponse:
-    print(f"[DEBUG] Generating blocks for: {subtopic_title}, score: {learner_score}")
+    print(f"Generating blocks for: {subtopic_title}, score: {learner_score}")
     
     prompt = f"""
 {teachingPrompt}
@@ -83,84 +98,60 @@ Generate structured teaching blocks as JSON array.
     def _call_content(api_key: str):
         client = genai.Client(api_key=api_key)
         
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": TeachingResponse,
-                "temperature": 1.0,
-            }
-        )
-        
-        return response.text
+        config = {
+            "response_mime_type": "application/json",
+            "response_schema": TeachingResponse,
+            "temperature": 1.0,
+            "safety_settings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        }
+
+        try:
+            
+            print(f"[DEBUG] Attempting generation with gemini-3-flash-preview...")
+            response = client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=prompt,
+                config=config
+            )
+
+            if not response.text:
+                 raise ValueError("Gemini 3 Flash returned empty response (likely safety block or empty)")
+            return response.text
+        except Exception as e:
+            print(f"[WARNING] gemini-3-flash-preview failed: {str(e)}")
+            print(f"[DEBUG] Falling back to gemini-2.5-flash...")
+            
+            # Fallback to Gemini 2.5 Flash
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=config
+            )
+            if not response.text:
+                 raise ValueError("Gemini 2.5 Flash returned empty response (likely safety block or empty)")
+            return response.text
     
     try:
         raw_response = key_manager.execute_with_retry(_call_content)
-        print(f"[DEBUG] Received response from Gemini")
         
         parsed = json.loads(raw_response)
         result = TeachingResponse(**parsed)
         
-        block_types = [block.type for block in result.blocks]
-        print(f"[DEBUG] Block types generated: {block_types}")
-        
         for i, block in enumerate(result.blocks):
             if isinstance(block, Simulation):
                 html = block.html.strip()
-                if html.startswith("```html"):
-                    html = html[7:]
                 if html.endswith("```"):
                     html = html[:-3]
                 block.html = html.strip()
-                print(f"[DEBUG] Simulation block {i}: {len(block.html)} chars")
-                print(f"[DEBUG] First 300 chars: {block.html[:300]}")
-        
-        print(f"[DEBUG] Generated {len(result.blocks)} blocks successfully")
+
         return result
         
     except Exception as e:
-        print(f"[ERROR] Generation failed with gemini-3-flash-preview: {str(e)}")
+        print(f"Generation failed: {str(e)}")
         print(traceback.format_exc())
-        
-        print(f"[DEBUG] Retrying with gemini-2.5-flash fallback...")
-        
-        try:
-            def _call_fallback(api_key: str):
-                client = genai.Client(api_key=api_key)
-                
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config={
-                        "response_mime_type": "application/json",
-                        "response_schema": TeachingResponse,
-                        "temperature": 1.0,
-                    }
-                )
-                
-                return response.text
-            
-            raw_response = key_manager.execute_with_retry(_call_fallback)
-            print(f"[DEBUG] Fallback succeeded")
-            
-            parsed = json.loads(raw_response)
-            result = TeachingResponse(**parsed)
-            
-            for i, block in enumerate(result.blocks):
-                if isinstance(block, Simulation):
-                    html = block.html.strip()
-                    if html.startswith("```html"):
-                        html = html[7:]
-                    if html.endswith("```"):
-                        html = html[:-3]
-                    block.html = html.strip()
-                    print(f"[DEBUG] Simulation block {i}: {len(block.html)} chars")
-            
-            print(f"[DEBUG] Generated {len(result.blocks)} blocks with fallback")
-            return result
-            
-        except Exception as fallback_error:
-            print(f"[ERROR] Fallback also failed: {str(fallback_error)}")
-            print(traceback.format_exc())
-            raise
+        raise e

@@ -4,6 +4,22 @@ import { Check, X, Lightbulb, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuestionBlock as QuestionType } from '@/types/teaching';
 
+// Markdown helper function
+const renderMarkdownContent = (content: string) => {
+    const parts = content.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            const text = part.slice(2, -2);
+            return (
+                <strong key={index} className="font-semibold text-primary">
+                    {text}
+                </strong>
+            );
+        }
+        return <span key={index}>{part}</span>;
+    });
+};
+
 interface QuestionBlockProps {
     question: QuestionType;
     subtopicId: string;
@@ -34,7 +50,11 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
         if (question.questionType === 'mcq') {
             correct = selectedAnswer === question.correctIndex;
         } else {
-            correct = fillInAnswer.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
+            const userAnswer = fillInAnswer.trim().toLowerCase();
+            const correctMain = question.correctAnswer?.toLowerCase();
+            const accepted = question.acceptedAnswers?.map(a => a.toLowerCase()) || [];
+
+            correct = userAnswer === correctMain || accepted.includes(userAnswer);
         }
 
         const newAttemptCount = attemptCount + 1;
@@ -85,7 +105,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                         )}
                     </div>
                     <p className="text-lg font-medium text-foreground leading-relaxed">
-                        {question.question}
+                        {renderMarkdownContent(question.question)}
                     </p>
                 </div>
             </div>
@@ -141,7 +161,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                                     "flex-1 text-foreground font-medium",
                                     optionState === 'incorrect' && "text-muted-foreground"
                                 )}>
-                                    {option}
+                                    {renderMarkdownContent(option)}
                                 </span>
                             </motion.button>
                         );
@@ -205,30 +225,42 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                         <div className={cn(
                             "p-5 rounded-xl border-2",
                             isCorrect
-                                ? "bg-complete/10 border-complete/30"
+                                ? "bg-green-500/10 border-green-500/30"
                                 : "bg-accent border-border"
                         )}>
                             <div className="flex items-start gap-3">
                                 <div className={cn(
                                     "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                                    isCorrect ? "bg-complete/20" : "bg-primary/20"
+                                    isCorrect ? "bg-green-500/20" : "bg-primary/20"
                                 )}>
                                     {isCorrect ? (
-                                        <Check className="w-5 h-5 text-complete" />
+                                        <Check className="w-5 h-5 text-green-500" />
                                     ) : (
                                         <Lightbulb className="w-5 h-5 text-primary" />
                                     )}
                                 </div>
                                 <div className="flex-1">
-                                    <p className={cn(
-                                        "font-semibold mb-2 text-base",
-                                        isCorrect ? "text-complete" : "text-foreground"
-                                    )}>
-                                        {isCorrect ? "Correct! Well done! 🎉" : "Not quite right"}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">
-                                        {question.explanations.correct}
-                                    </p>
+                                    {isCorrect ? (
+                                        <>
+                                            <p className="font-semibold mb-2 text-base text-green-500">
+                                                Correct! Well done! 🎉
+                                            </p>
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                                {question.explanations.correct}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="font-semibold mb-2 text-base text-foreground">
+                                                Not quite right
+                                            </p>
+                                            {question.questionType === 'fill_in_blank' && (
+                                                <p className="text-sm font-medium text-foreground">
+                                                    The correct answer is: <span className="text-primary font-semibold">{question.correctAnswer}</span>
+                                                </p>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
