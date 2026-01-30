@@ -1,9 +1,10 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Brain, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { CurriculumTree } from '@/components/curriculum/CurriculumTree';
 import { useCurriculum } from '@/hooks/useCurriculum';
 import type { Module, Subtopic } from '@/types/curriculum';
+import { OrbitLogo } from '@/components/brand/OrbitLogo';
 
 export default function CurriculumPage() {
   const navigate = useNavigate();
@@ -59,12 +60,7 @@ export default function CurriculumPage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Brain className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-foreground">ORBIT</span>
-          </div>
+          <OrbitLogo size="sm" />
         </div>
       </header>
 
@@ -74,14 +70,14 @@ export default function CurriculumPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             className={`mb-8 p-6 rounded-2xl border ${isFullyComplete
-                ? 'bg-complete/10 border-complete/30'
-                : 'bg-accent/50 border-primary/20'
+              ? 'bg-complete/10 border-complete/30'
+              : 'bg-accent/50 border-primary/20'
               }`}
           >
             <div className="flex items-start gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isFullyComplete
-                  ? 'bg-complete/20'
-                  : 'bg-primary/20'
+                ? 'bg-complete/20'
+                : 'bg-primary/20'
                 }`}>
                 {isFullyComplete ? (
                   <svg className="w-6 h-6 text-complete" fill="none" viewBox="0 0 24 24" stroke="currentColor">
