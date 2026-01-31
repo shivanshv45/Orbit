@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, Video, VideoOff } from 'lucide-react';
+import { Loader2, Video, VideoOff, Mic, MicOff } from 'lucide-react';
 import { CameraFeedback } from '@/components/teaching/CameraFeedback';
 import { TopicNavigator } from '@/components/layout/TopicNavigator';
 import { ProgressIndicator } from '@/components/layout/ProgressIndicator';
 import { TeachingCanvas } from '@/components/teaching/TeachingCanvas';
+import { VoiceCompatibilityWarning } from '@/components/teaching/VoiceCompatibilityWarning';
+import { VoiceEngine } from '@/lib/voice/VoiceEngine';
+import { loadVoicePreferences } from '@/lib/voice/VoicePreferences';
+import { getBrowserCompatibility } from '@/lib/voice/browserCompatibility';
 import { useCurriculum } from '@/hooks/useCurriculum';
 import { useTeachingContent } from '@/hooks/useTeachingContent';
 import { useFaceTracking } from '@/hooks/useFaceTracking';
@@ -21,6 +25,9 @@ export default function LearnPage() {
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
+  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
+  const [tempVoiceEngine, setTempVoiceEngine] = useState<VoiceEngine | null>(null);
   const { user } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null);
   // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
@@ -32,6 +39,20 @@ export default function LearnPage() {
 
   // Face tracking hook
   const { isActive: cameraActive, currentMetrics } = useFaceTracking(currentSubtopicId, cameraEnabled);
+
+  // Load voice mode preference on mount
+  useEffect(() => {
+    const prefs = loadVoicePreferences();
+    if (prefs.visualImpairmentMode === true) {
+      setVoiceModeEnabled(true);
+    }
+
+    const storedPref = localStorage.getItem('orbit_voice_mode_enabled');
+    if (storedPref === 'true') {
+      // Don't auto-enable, just remember the preference
+      // User must explicitly enable each session for safety
+    }
+  }, []);
 
   // Log metrics for debugging
   useEffect(() => {
@@ -94,6 +115,9 @@ export default function LearnPage() {
   const nextSubtopic = currentIndex >= 0 && currentIndex < allSubtopics.length - 1
     ? allSubtopics[currentIndex + 1]
     : null;
+  const previousSubtopic = currentIndex > 0
+    ? allSubtopics[currentIndex - 1]
+    : null;
 
   // Prefetch next subtopic
   useEffect(() => {
@@ -122,8 +146,76 @@ export default function LearnPage() {
     }
   };
 
+  const handlePrevious = () => {
+    // Invalidate curriculum query to update stats immediately
+    queryClient.invalidateQueries({ queryKey: ['curriculum'] });
+
+    if (previousSubtopic) {
+      handleSelectSubtopic(previousSubtopic.id);
+    }
+  };
+
   const handleBack = () => {
     navigate('/curriculum');
+  };
+
+  // Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) return;
+
+      if (e.key === 'ArrowRight') {
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevious();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nextSubtopic, previousSubtopic, navigate]); // Add simpler dependencies if possible, or assume handlers are stable if wrapped (they aren't wrapped in useCallback currently)
+
+
+  // Handle voice mode toggle
+  const handleVoiceToggle = () => {
+    if (!voiceModeEnabled) {
+      // Check browser compatibility before enabling
+      const compatibility = getBrowserCompatibility();
+
+      if (!compatibility.isFullySupported && compatibility.warningMessage) {
+        // Show warning dialog and create temp voice engine for speaking the warning
+        setShowCompatibilityWarning(true);
+        const engine = new VoiceEngine();
+        setTempVoiceEngine(engine);
+      } else {
+        // Fully supported, enable immediately
+        setVoiceModeEnabled(true);
+        localStorage.setItem('orbit_voice_mode_enabled', 'true');
+      }
+    } else {
+      // Disable voice mode
+      setVoiceModeEnabled(false);
+      localStorage.setItem('orbit_voice_mode_enabled', 'false');
+    }
+  };
+
+  // Handle compatibility warning response
+  const handleCompatibilityConfirm = () => {
+    setShowCompatibilityWarning(false);
+    setVoiceModeEnabled(true);
+    localStorage.setItem('orbit_voice_mode_enabled', 'true');
+    tempVoiceEngine?.destroy();
+    setTempVoiceEngine(null);
+  };
+
+  const handleCompatibilityCancel = () => {
+    setShowCompatibilityWarning(false);
+    tempVoiceEngine?.destroy();
+    setTempVoiceEngine(null);
+  };
+
+  const handleSpeak = (text: string) => {
+    tempVoiceEngine?.speak(text);
   };
 
   // Calculate some stats for progress panel
@@ -183,7 +275,7 @@ export default function LearnPage() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative">
-        {/* Camera Toggle - Fixed Below Sidebar Toggle */}
+        {/* Camera & Voice Toggle - Fixed Below Sidebar Toggle */}
         <div className="fixed top-16 right-4 z-40 flex flex-col items-end gap-3">
           <button
             onClick={() => setCameraEnabled(!cameraEnabled)}
@@ -194,6 +286,19 @@ export default function LearnPage() {
               <Video className="w-5 h-5 text-primary" />
             ) : (
               <VideoOff className="w-5 h-5" />
+            )}
+          </button>
+
+          <button
+            onClick={handleVoiceToggle}
+            className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 shadow-sm hover:shadow-md"
+            title={voiceModeEnabled ? "Disable Voice Mode" : "Enable Voice Mode"}
+            aria-label={voiceModeEnabled ? "Disable voice learning mode" : "Enable voice learning mode"}
+          >
+            {voiceModeEnabled ? (
+              <Mic className="w-5 h-5 text-primary" />
+            ) : (
+              <MicOff className="w-5 h-5" />
             )}
           </button>
 
@@ -243,12 +348,24 @@ export default function LearnPage() {
                 blocks={teachingData?.blocks || []}
                 subtopicId={currentSubtopicId}
                 onNext={handleNext}
+                onPrevious={handlePrevious}
                 hasNext={!!nextSubtopic}
+                hasPrevious={!!previousSubtopic}
+                voiceModeEnabled={voiceModeEnabled}
               />
             </motion.div>
           )}
         </div>
       </main>
+
+      {/* Voice Compatibility Warning */}
+      <VoiceCompatibilityWarning
+        isOpen={showCompatibilityWarning}
+        compatibility={getBrowserCompatibility()}
+        onContinue={handleCompatibilityConfirm}
+        onCancel={handleCompatibilityCancel}
+        onSpeak={handleSpeak}
+      />
 
       {/* Right Sidebar - Progress (Toggleable) */}
       <ProgressIndicator
