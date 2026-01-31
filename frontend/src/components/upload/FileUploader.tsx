@@ -30,7 +30,7 @@ interface FileUploaderProps {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export function FileUploader({ onUploadComplete }: FileUploaderProps) {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,7 +111,7 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
     ));
 
     try {
-      const userSession = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null);
+      const userSession = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
       const formData = new FormData();
 
       filesToUpload.forEach(fileObj => {

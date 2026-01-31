@@ -3,79 +3,58 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Stars, Float, PerspectiveCamera, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 
-function Planet({ position, size, color, ringColor, hasRings = false, rotationSpeed = 0.01 }: { position: [number, number, number], size: number, color: string, ringColor?: string, hasRings?: boolean, rotationSpeed?: number }) {
+function Planet({ position, size, color, ringColor, hasRings = false, rotationSpeed = 0.01, glowIntensity = 'low' }: { position: [number, number, number], size: number, color: string, ringColor?: string, hasRings?: boolean, rotationSpeed?: number, glowIntensity?: 'low' | 'medium' | 'high' }) {
     const meshRef = useRef<THREE.Mesh>(null);
 
-    useFrame((state, delta) => {
+    useFrame((_, delta) => {
         if (meshRef.current) {
             meshRef.current.rotation.y += delta * rotationSpeed;
         }
     });
 
+    const glowConfig = {
+        low: { innerOpacity: 0.15, outerOpacity: 0.05, outerScale: 1.3 },
+        medium: { innerOpacity: 0.3, outerOpacity: 0.12, outerScale: 1.5 },
+        high: { innerOpacity: 0.5, outerOpacity: 0.25, outerScale: 1.8 }
+    };
+
+    const glow = glowConfig[glowIntensity];
+
     return (
         <group position={position}>
-            {/* Main Planet Sphere */}
             <mesh ref={meshRef}>
-                <sphereGeometry args={[size, 64, 64]} />
-                <meshStandardMaterial
-                    color={color}
-                    roughness={0.7} // More matte, realistic surface
-                    metalness={0.2}
-                // Removed emissive to stop "vague" flat look; relies on sun light now
-                />
+                <sphereGeometry args={[size, 32, 32]} />
+                <meshStandardMaterial color={color} roughness={0.7} metalness={0.2} />
             </mesh>
 
-            {/* Inner Atmosphere (Rim Light) */}
             <mesh scale={[1.1, 1.1, 1.1]}>
-                <sphereGeometry args={[size, 32, 32]} />
-                <meshBasicMaterial
-                    color={color}
-                    transparent
-                    opacity={0.3}
-                    side={THREE.BackSide}
-                    blending={THREE.AdditiveBlending}
-                />
+                <sphereGeometry args={[size, 24, 24]} />
+                <meshBasicMaterial color={color} transparent opacity={glow.innerOpacity} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
             </mesh>
 
-            {/* Outer Atmosphere Glow (Soft Gradient) */}
-            <mesh scale={[1.4, 1.4, 1.4]}>
-                <sphereGeometry args={[size, 32, 32]} />
-                <meshBasicMaterial
-                    color={color}
-                    transparent
-                    opacity={0.1}
-                    side={THREE.BackSide}
-                    blending={THREE.AdditiveBlending}
-                />
+            <mesh scale={[glow.outerScale, glow.outerScale, glow.outerScale]}>
+                <sphereGeometry args={[size, 24, 24]} />
+                <meshBasicMaterial color={color} transparent opacity={glow.outerOpacity} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
             </mesh>
 
-            {/* Optional Rings */}
             {hasRings && ringColor && (
                 <mesh rotation={[Math.PI / 3, 0, 0]}>
-                    <ringGeometry args={[size * 1.5, size * 2.5, 64]} />
-                    <meshBasicMaterial
-                        color={ringColor}
-                        side={THREE.DoubleSide}
-                        transparent
-                        opacity={0.5}
-                        blending={THREE.AdditiveBlending}
-                    />
+                    <ringGeometry args={[size * 1.5, size * 2.5, 48]} />
+                    <meshBasicMaterial color={ringColor} side={THREE.DoubleSide} transparent opacity={0.5} blending={THREE.AdditiveBlending} />
                 </mesh>
             )}
         </group>
     );
 }
 
-// ... ParticleRing stays the same ...
 function ParticleRing({ count = 100, radius = 20, color = '#6366f1', size = 0.5, speed = 0.1 }) {
     const points = useMemo(() => {
         const p = new Float32Array(count * 3);
         for (let i = 0; i < count; i++) {
             const theta = (i / count) * 2 * Math.PI;
-            // Add some noise to radius
             const r = radius + (Math.random() - 0.5) * 2;
             p[i * 3] = r * Math.cos(theta);
-            p[i * 3 + 1] = (Math.random() - 0.5) * 2; // slight vertical height
+            p[i * 3 + 1] = (Math.random() - 0.5) * 2;
             p[i * 3 + 2] = r * Math.sin(theta);
         }
         return p;
@@ -86,29 +65,16 @@ function ParticleRing({ count = 100, radius = 20, color = '#6366f1', size = 0.5,
     useFrame((state) => {
         if (ref.current) {
             ref.current.rotation.y += speed * 0.001;
-            // Gentle wobble
-            ref.current.rotation.x = Math.sin(state.clock.getElapsedTime() * 0.2) * 0.05;
+            ref.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.05;
         }
     });
 
     return (
         <points ref={ref}>
             <bufferGeometry>
-                <bufferAttribute
-                    attach="attributes-position"
-                    count={points.length / 3}
-                    array={points}
-                    itemSize={3}
-                />
+                <bufferAttribute attach="attributes-position" count={points.length / 3} array={points} itemSize={3} />
             </bufferGeometry>
-            <pointsMaterial
-                size={size}
-                color={color}
-                sizeAttenuation={true}
-                transparent
-                opacity={0.8}
-                blending={THREE.AdditiveBlending}
-            />
+            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={0.8} blending={THREE.AdditiveBlending} />
         </points>
     );
 }
@@ -116,57 +82,43 @@ function ParticleRing({ count = 100, radius = 20, color = '#6366f1', size = 0.5,
 function GlowingSun() {
     return (
         <group>
-            {/* Core Sun */}
             <mesh>
-                <sphereGeometry args={[2.5, 64, 64]} />
-                <meshStandardMaterial
-                    color="#4f46e5"
-                    emissive="#4338ca"
-                    emissiveIntensity={4}
-                    toneMapped={false}
-                />
-            </mesh>
-
-            {/* Inner Corona */}
-            <mesh scale={[1.1, 1.1, 1.1]}>
                 <sphereGeometry args={[2.5, 32, 32]} />
-                <meshBasicMaterial
-                    color="#6366f1"
-                    transparent
-                    opacity={0.4}
-                    side={THREE.BackSide}
-                />
+                <meshStandardMaterial color="#4f46e5" emissive="#4338ca" emissiveIntensity={4} toneMapped={false} />
             </mesh>
 
-            {/* Outer Corona Halo */}
-            <mesh scale={[1.6, 1.6, 1.6]}>
-                <sphereGeometry args={[2.5, 32, 32]} />
-                <meshBasicMaterial
-                    color="#818cf8"
-                    transparent
-                    opacity={0.15}
-                    side={THREE.BackSide}
-                    blending={THREE.AdditiveBlending}
-                />
+            <mesh scale={[1.15, 1.15, 1.15]}>
+                <sphereGeometry args={[2.5, 24, 24]} />
+                <meshBasicMaterial color="#6366f1" transparent opacity={0.5} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
             </mesh>
 
-            {/* Stronger Light Source for Planets */}
+            <mesh scale={[1.4, 1.4, 1.4]}>
+                <sphereGeometry args={[2.5, 24, 24]} />
+                <meshBasicMaterial color="#818cf8" transparent opacity={0.3} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+            </mesh>
+
+            <mesh scale={[2.0, 2.0, 2.0]}>
+                <sphereGeometry args={[2.5, 24, 24]} />
+                <meshBasicMaterial color="#a5b4fc" transparent opacity={0.15} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+            </mesh>
+
             <pointLight distance={100} intensity={3} color="#ffffff" decay={0.5} />
             <ambientLight intensity={0.2} />
         </group>
-    )
+    );
 }
 
 function Scene() {
-    const mouse = useRef([0, 0]);
+    const mouse = useRef({ x: 0, y: 0 });
+    const current = useRef({ x: 0, y: 0 });
 
-    // Parallax effect on mouse move
     useFrame((state) => {
-        const { pointer } = state;
-        mouse.current = [pointer.x, pointer.y];
-
-        state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, mouse.current[0] * 2, 0.05);
-        state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, mouse.current[1] * 2, 0.05);
+        mouse.current.x = state.pointer.x;
+        mouse.current.y = state.pointer.y;
+        current.current.x += (mouse.current.x * 2 - current.current.x) * 0.03;
+        current.current.y += (mouse.current.y * 2 - current.current.y) * 0.03;
+        state.camera.position.x = current.current.x;
+        state.camera.position.y = current.current.y;
         state.camera.lookAt(0, 0, 0);
     });
 
@@ -174,41 +126,24 @@ function Scene() {
         <>
             <PerspectiveCamera makeDefault position={[0, -2, 20]} fov={60} />
 
-            {/* Stars & Sparkles for depth and glow */}
             <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            <Sparkles count={150} scale={25} size={3} speed={0.4} opacity={0.5} color="#c7d2fe" />
+            <Sparkles count={100} scale={25} size={2.5} speed={0.3} opacity={0.5} color="#c7d2fe" />
 
             <group rotation={[Math.PI / 6, 0, 0]}>
                 <GlowingSun />
 
-                {/* Orbital Rings */}
-                <ParticleRing count={200} radius={8} color="#a78bfa" size={0.1} speed={2} />
-                <ParticleRing count={300} radius={12} color="#818cf8" size={0.15} speed={1.5} />
-                <ParticleRing count={500} radius={18} color="#2dd4bf" size={0.1} speed={1} />
+                <ParticleRing count={150} radius={8} color="#a78bfa" size={0.1} speed={2} />
+                <ParticleRing count={200} radius={12} color="#818cf8" size={0.15} speed={1.5} />
+                <ParticleRing count={300} radius={18} color="#2dd4bf" size={0.1} speed={1} />
 
-                {/* Planets with enhanced realism */}
                 <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
-                    <Planet
-                        position={[10, 0, 5]}
-                        size={1.3}
-                        color="#a855f7" // Rich Purple
-                        hasRings
-                        ringColor="#f0abfc"
-                    />
+                    <Planet position={[10, 0, 5]} size={1.3} color="#a855f7" hasRings ringColor="#f0abfc" glowIntensity="high" />
                 </Float>
                 <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
-                    <Planet
-                        position={[-12, 2, -4]}
-                        size={1.1}
-                        color="#14b8a6" // Teal
-                    />
+                    <Planet position={[-12, 2, -4]} size={1.1} color="#14b8a6" glowIntensity="low" />
                 </Float>
                 <Float speed={1} rotationIntensity={0.1} floatIntensity={0.3}>
-                    <Planet
-                        position={[12, -8, -10]}
-                        size={0.8}
-                        color="#0ea5e9" // Sky Blue
-                    />
+                    <Planet position={[12, -8, -10]} size={0.8} color="#0ea5e9" glowIntensity="low" />
                 </Float>
             </group>
 
@@ -220,10 +155,9 @@ function Scene() {
 export function SolarSystemBackground() {
     return (
         <div className="fixed inset-0 -z-10 bg-background">
-            <Canvas dpr={[1, 2]}>
+            <Canvas dpr={[1, 1.5]} gl={{ powerPreference: 'high-performance' }}>
                 <Scene />
             </Canvas>
-            {/* Gradient Overlay to ensure text readability */}
             <div className="absolute inset-0 bg-background/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-background/50 to-background pointer-events-none" />
         </div>
     );

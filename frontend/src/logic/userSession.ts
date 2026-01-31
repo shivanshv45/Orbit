@@ -29,18 +29,22 @@ async function createUserInDB(uid: string, name: string, isGuest: boolean): Prom
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Failed to create user in database:', errorText);
-        } else {
-            console.log('User created successfully in database:', name);
         }
     } catch (error) {
         console.error('Error creating user in database:', error);
     }
 }
 
-export function createOrGetUser(clerkUser?: { id: string; fullName: string | null } | null): UserSession {
+export function createOrGetUser(
+    clerkUser?: { id: string; fullName: string | null } | null,
+    isClerkLoaded: boolean = true
+): UserSession {
     if (clerkUser?.id) {
-        const userName = clerkUser.fullName || clerkUser.id.split('_')[1] || 'User';
+        if (cachedSession && cachedSession.uid === clerkUser.id) {
+            return cachedSession;
+        }
 
+        const userName = clerkUser.fullName || clerkUser.id.split('_')[1] || 'User';
         const existingStoredUid = localStorage.getItem(USER_ID_KEY);
         const isNew = existingStoredUid !== clerkUser.id;
 
@@ -50,7 +54,6 @@ export function createOrGetUser(clerkUser?: { id: string; fullName: string | nul
 
         if (isNew) {
             createUserInDB(clerkUser.id, userName, false);
-            console.log('Authenticated user created:', { uid: clerkUser.id, name: userName });
         }
 
         cachedSession = {
@@ -63,50 +66,69 @@ export function createOrGetUser(clerkUser?: { id: string; fullName: string | nul
         return cachedSession;
     }
 
-    if (cachedSession) {
-        return cachedSession;
-    }
-
     const storedUid = localStorage.getItem(USER_ID_KEY);
     const storedName = localStorage.getItem(USER_NAME_KEY);
     const storedIsGuest = localStorage.getItem(IS_GUEST_KEY);
 
-    if (!storedUid || !storedName || storedIsGuest !== 'true') {
-        const uid = `guest_${uuid4()}`;
-        const name = randomUserName();
+    if (cachedSession) {
+        if (storedUid) {
+            if (cachedSession.uid !== storedUid) {
+                cachedSession = null;
+            }
+        } else {
+            cachedSession = null;
+        }
+    }
 
-        localStorage.setItem(USER_ID_KEY, uid);
-        localStorage.setItem(USER_NAME_KEY, name);
-        localStorage.setItem(IS_GUEST_KEY, 'true');
+    if (!isClerkLoaded) {
+        if (storedUid && storedName) {
+            cachedSession = {
+                uid: storedUid,
+                name: storedName,
+                isNew: false,
+                isGuest: storedIsGuest === 'true',
+            };
+            return cachedSession;
+        }
 
-        createUserInDB(uid, name, true);
+        if (cachedSession) return cachedSession;
 
-        console.log('Guest user created:', { uid, name });
+        return { uid: '', name: '', isNew: false, isGuest: true };
+    }
 
+    if (cachedSession) return cachedSession;
+
+    if (storedUid && storedName) {
         cachedSession = {
-            uid,
-            name,
-            isNew: true,
-            isGuest: true,
+            uid: storedUid,
+            name: storedName,
+            isNew: false,
+            isGuest: storedIsGuest === 'true',
         };
-
         return cachedSession;
     }
 
-    console.log('Existing guest user loaded:', { uid: storedUid, name: storedName });
+    const uid = `guest_${uuid4()}`;
+    const name = randomUserName();
+
+    localStorage.setItem(USER_ID_KEY, uid);
+    localStorage.setItem(USER_NAME_KEY, name);
+    localStorage.setItem(IS_GUEST_KEY, 'true');
+
+    createUserInDB(uid, name, true);
 
     cachedSession = {
-        uid: storedUid,
-        name: storedName,
-        isNew: false,
-        isGuest: storedIsGuest === 'true',
+        uid,
+        name,
+        isNew: true,
+        isGuest: true,
     };
 
     return cachedSession;
 }
 
 export function initializeUser(): void {
-    createOrGetUser();
+    createOrGetUser(null, true);
 }
 
 export function clearUserSession(): void {

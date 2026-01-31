@@ -1,73 +1,29 @@
-# React + TypeScript + Vite
+# Orbit Frontend Engineering
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Premium educational interface built with React 18, TypeScript, and Vite.
 
-Currently, two official plugins are available:
+## ⚡ Core Technical Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 1. Adaptive Learning Interface
+- **Dynamic Content Rendering**: `TeachingCanvas` uses a block-based architecture to render heterogenous content (text, math, code, interactive simulations) derived from AI responses.
+- **Interactive Simulations**: `SimulationBlock` implements a sandboxed runtime for AI-generated HTML/CSS/JS experiments. Features automatic script extraction, isolation, and safe execution within React's lifecycle.
+- **Real-time Engagement**: `useFaceTracking` integrates Google MediaPipe for client-side attention monitoring and engagement scoring.
+- **Voice Control**: Full-duplex voice interaction using Web Speech API (`useVoiceMode`) for hands-free learning navigation.
 
-## React Compiler
+### 2. Advanced Session Management
+- **Hybrid Auth System**: Seamlessly handles both ephemeral Guest users (local UUIDs) and Authenticated users (Clerk).
+- **Session Preservation**: 
+  - Custom `SessionObserver` logic automatically snapshots Guest state before login.
+  - on Sign-out, intelligently restores the previous Guest session/curriculum instead of resetting to a blank state.
+  - Implements aggressive cache invalidation in `userSession.ts` to prevent data cross-talk.
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+### 3. Revision & Testing Module
+- **4-Phase Modal Architecture**: Implemented `RevisionModal` handling Loading → Note Review → Interactive Testing → Result Analysis states.
+- **Client-Side Scoring Logic**: 
+  - Adaptive scoring decay: 100% (1st try) → 75% → 50% → 25%.
+  - Local state management for immediate feedback loops before async persistence.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### 4. Application Architecture
+- **State Management**: Heavily leverages `@tanstack/react-query` for server-state synchronization with optimistic updates.
+- **Route-based Lazy Loading**: Optimized chunking for `Landing`, `Curriculum`, and `Learn` flows.
+- **Optimized Assets**: Framer Motion for GPU-accelerated layout transitions and micro-interactions.

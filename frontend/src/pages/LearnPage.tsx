@@ -28,8 +28,8 @@ export default function LearnPage() {
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
   const [tempVoiceEngine, setTempVoiceEngine] = useState<VoiceEngine | null>(null);
-  const { user } = useUser();
-  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null);
+  const { user, isLoaded } = useUser();
+  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
   // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
   // Actually, wait, line 65 uses queryClient.prefetchQuery. So I need to import useQueryClient again.
   const queryClient = useQueryClient();

@@ -1,262 +1,198 @@
-import { useRef, useEffect, useState } from 'react';
-import { motion, useScroll, useSpring } from 'framer-motion';
-import { Sparkles, BookOpen, Brain, Zap } from 'lucide-react';
+import { useRef, useEffect, useState, memo, useCallback } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+
+const IconStructure = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="3" width="8" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
+        <path d="M6 7h0M6 10h0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+        <rect x="14" y="3" width="6" height="5" rx="1" fill="currentColor" opacity="0.9" />
+        <rect x="14" y="10" width="6" height="5" rx="1" fill="currentColor" opacity="0.6" />
+        <rect x="14" y="17" width="6" height="5" rx="1" fill="currentColor" opacity="0.3" />
+        <path d="M10 8 L14 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+        <path d="M10 8 L14 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+        <path d="M10 10 L14 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+    </svg>
+);
+
+const IconPacing = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="12" rx="9" ry="4" stroke="currentColor" strokeWidth="1.5" opacity="0.3" transform="rotate(-20 12 12)" />
+        <ellipse cx="12" cy="12" rx="6" ry="2.5" stroke="currentColor" strokeWidth="1.5" opacity="0.5" transform="rotate(-20 12 12)" />
+        <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+        <circle cx="18" cy="10" r="1.5" fill="currentColor" opacity="0.8" />
+        <circle cx="20" cy="11" r="1" fill="currentColor" opacity="0.5" />
+        <circle cx="21.5" cy="11.5" r="0.6" fill="currentColor" opacity="0.3" />
+        <path d="M6 6 L4 4M18 18 L20 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4" />
+    </svg>
+);
+
+const IconRetention = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="2" fill="currentColor" />
+        <circle cx="7" cy="14" r="1.5" fill="currentColor" opacity="0.7" />
+        <circle cx="17" cy="14" r="1.5" fill="currentColor" opacity="0.7" />
+        <circle cx="12" cy="18" r="1.5" fill="currentColor" opacity="0.5" />
+        <circle cx="5" cy="9" r="1" fill="currentColor" opacity="0.4" />
+        <circle cx="19" cy="9" r="1" fill="currentColor" opacity="0.4" />
+        <path d="M12 10 L7 13 M12 10 L17 13 M7 15.5 L12 17 M17 15.5 L12 17" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+        <path d="M10 8 Q5 7 5 9 M14 8 Q19 7 19 9" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1" strokeDasharray="2 3" opacity="0.2" />
+    </svg>
+);
+
+const IconVisuals = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M8 8 L16 8 L18 12 L16 16 L8 16 L6 12 Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.15" />
+        <path d="M8 8 L10 5 L18 5 L16 8" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
+        <path d="M18 5 L20 9 L18 12" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1" strokeDasharray="1 2" opacity="0.25" />
+        <path d="M3 12 L5 12 M19 12 L21 12 M12 3 L12 5 M12 19 L12 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4" />
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.8" />
+    </svg>
+);
 
 const features = [
     {
-        icon: Sparkles,
+        icon: IconStructure,
         title: 'Instant Structure',
         description: 'Raw documents become organized, bite-sized learning modules instantly',
         position: 0.15,
         side: 'left' as const,
-        asteroidShape: 'M 10,50 Q 5,20 30,10 Q 60,5 80,25 Q 95,45 90,70 Q 85,90 55,95 Q 25,98 10,75 Q 2,60 10,50',
     },
     {
-        icon: BookOpen,
+        icon: IconPacing,
         title: 'Adaptive Pacing',
         description: 'Content that evolves with your understanding, moving at your speed',
         position: 0.38,
         side: 'right' as const,
-        asteroidShape: 'M 15,40 Q 8,15 40,8 Q 70,3 88,30 Q 98,55 85,80 Q 70,95 40,92 Q 12,88 8,60 Q 5,45 15,40',
     },
     {
-        icon: Brain,
+        icon: IconRetention,
         title: 'Smart Retention',
         description: 'Practice exactly what you need to review, right when it matters',
         position: 0.6,
         side: 'left' as const,
-        asteroidShape: 'M 12,45 Q 3,18 35,5 Q 65,0 85,22 Q 100,50 88,78 Q 75,98 42,95 Q 10,92 5,65 Q 0,50 12,45',
     },
     {
-        icon: Zap,
+        icon: IconVisuals,
         title: 'Interactive Visuals',
         description: 'Grasp complex concepts through dynamic, hands-on simulations',
         position: 0.82,
         side: 'right' as const,
-        asteroidShape: 'M 8,48 Q 2,20 32,8 Q 62,0 85,20 Q 100,45 92,72 Q 80,95 48,98 Q 15,95 5,70 Q 0,55 8,48',
     },
 ];
 
-function Planet({ className }: { className?: string }) {
+
+const Planet = memo(function Planet() {
     return (
-        <svg
-            width="100"
-            height="100"
-            viewBox="0 0 100 100"
-            className={className}
-            style={{
-                filter: 'drop-shadow(0 0 35px rgba(139, 92, 246, 0.65)) drop-shadow(0 0 70px rgba(99, 102, 241, 0.4))',
-            }}
-        >
+        <svg width="160" height="160" viewBox="0 0 160 160">
             <defs>
-                <radialGradient id="planetSurface" cx="35%" cy="30%" r="65%">
+                <radialGradient id="pBase" cx="30%" cy="25%" r="70%">
                     <stop offset="0%" stopColor="#c084fc" />
-                    <stop offset="30%" stopColor="#a855f7" />
-                    <stop offset="60%" stopColor="#8b5cf6" />
-                    <stop offset="85%" stopColor="#6d28d9" />
+                    <stop offset="50%" stopColor="#8b5cf6" />
                     <stop offset="100%" stopColor="#4c1d95" />
                 </radialGradient>
-                <radialGradient id="atmosphereInner" cx="50%" cy="50%" r="50%">
-                    <stop offset="70%" stopColor="#a855f7" stopOpacity="0" />
-                    <stop offset="85%" stopColor="#8b5cf6" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0.4" />
-                </radialGradient>
-                <radialGradient id="outerHalo" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.3" />
-                    <stop offset="60%" stopColor="#6366f1" stopOpacity="0.15" />
-                    <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
-                </radialGradient>
-                <linearGradient id="surfaceBands" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="transparent" />
-                    <stop offset="20%" stopColor="rgba(255,255,255,0.08)" />
-                    <stop offset="25%" stopColor="transparent" />
-                    <stop offset="45%" stopColor="rgba(139,92,246,0.15)" />
-                    <stop offset="55%" stopColor="transparent" />
-                    <stop offset="70%" stopColor="rgba(255,255,255,0.05)" />
-                    <stop offset="75%" stopColor="transparent" />
-                    <stop offset="100%" stopColor="transparent" />
+                <linearGradient id="pRing" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#22d3ee" stopOpacity="0" />
+                    <stop offset="20%" stopColor="#22d3ee" stopOpacity="0.8" />
+                    <stop offset="50%" stopColor="#a855f7" stopOpacity="0.9" />
+                    <stop offset="80%" stopColor="#22d3ee" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
                 </linearGradient>
-                <linearGradient id="planetShadow" x1="100%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="transparent" />
-                    <stop offset="50%" stopColor="transparent" />
-                    <stop offset="100%" stopColor="rgba(0,0,0,0.5)" />
-                </linearGradient>
-                <clipPath id="planetClip">
-                    <circle cx="50" cy="50" r="28" />
-                </clipPath>
+                <clipPath id="pClip"><circle cx="80" cy="80" r="42" /></clipPath>
             </defs>
-
-            <circle cx="50" cy="50" r="48" fill="url(#outerHalo)" />
-            <circle cx="50" cy="50" r="36" fill="url(#atmosphereInner)" />
-            <circle cx="50" cy="50" r="28" fill="url(#planetSurface)" />
-            <circle cx="50" cy="50" r="28" fill="url(#surfaceBands)" clipPath="url(#planetClip)" />
-
-            <g clipPath="url(#planetClip)" opacity="0.4">
-                <ellipse cx="42" cy="45" rx="4" ry="2" fill="rgba(192, 132, 252, 0.5)" transform="rotate(-15 42 45)" />
-                <ellipse cx="58" cy="55" rx="3" ry="1.5" fill="rgba(139, 92, 246, 0.4)" transform="rotate(10 58 55)" />
-                <ellipse cx="45" cy="62" rx="5" ry="2" fill="rgba(99, 102, 241, 0.3)" transform="rotate(-5 45 62)" />
+            <circle cx="80" cy="80" r="55" fill="#8b5cf6" opacity="0.08" />
+            <circle cx="80" cy="80" r="42" fill="url(#pBase)" />
+            <g clipPath="url(#pClip)" stroke="#e9d5ff" strokeWidth="0.5" fill="none" opacity="0.3">
+                <path d="M 50 50 L 65 45 L 80 52 L 95 45 L 110 50" />
+                <path d="M 45 65 L 60 60 L 80 68 L 100 60 L 115 65" />
+                <path d="M 40 80 L 55 78 L 80 85 L 105 78 L 120 80" />
+                <path d="M 45 95 L 60 100 L 80 95 L 100 100 L 115 95" />
+                <path d="M 50 110 L 65 115 L 80 108 L 95 115 L 110 110" />
+                <line x1="65" y1="45" x2="60" y2="60" />
+                <line x1="80" y1="52" x2="80" y2="68" />
+                <line x1="95" y1="45" x2="100" y2="60" />
+                <line x1="60" y1="60" x2="55" y2="78" />
+                <line x1="80" y1="68" x2="80" y2="85" />
+                <line x1="100" y1="60" x2="105" y2="78" />
+                <line x1="55" y1="78" x2="60" y2="100" />
+                <line x1="80" y1="85" x2="80" y2="95" />
+                <line x1="105" y1="78" x2="100" y2="100" />
             </g>
-
-            <circle cx="50" cy="50" r="28" fill="url(#planetShadow)" />
-            <ellipse cx="40" cy="38" rx="8" ry="5" fill="white" opacity="0.2" transform="rotate(-25 40 38)" />
-            <ellipse cx="38" cy="36" rx="4" ry="2.5" fill="white" opacity="0.35" transform="rotate(-25 38 36)" />
-
-            <circle
-                cx="50"
-                cy="50"
-                r="28"
-                fill="none"
-                stroke="url(#atmosphereInner)"
-                strokeWidth="2"
-                opacity="0.6"
-            />
-
-            <path
-                d="M 35 26 Q 50 22, 65 26"
-                fill="none"
-                stroke="#22d3ee"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                opacity="0.3"
-            />
-            <path
-                d="M 38 74 Q 50 78, 62 74"
-                fill="none"
-                stroke="#2dd4bf"
-                strokeWidth="1"
-                strokeLinecap="round"
-                opacity="0.2"
-            />
+            <g clipPath="url(#pClip)" fill="#f0abfc" opacity="0.7">
+                <circle cx="65" cy="45" r="2" /><circle cx="80" cy="52" r="2.5" /><circle cx="95" cy="45" r="2" />
+                <circle cx="60" cy="60" r="1.5" /><circle cx="80" cy="68" r="2" /><circle cx="100" cy="60" r="1.5" />
+                <circle cx="55" cy="78" r="1.5" /><circle cx="80" cy="85" r="2.5" /><circle cx="105" cy="78" r="1.5" />
+                <circle cx="60" cy="100" r="2" /><circle cx="80" cy="95" r="1.5" /><circle cx="100" cy="100" r="2" />
+            </g>
+            <circle cx="80" cy="80" r="42" fill="url(#pBase)" opacity="0.3" style={{ mixBlendMode: 'overlay' }} />
+            <ellipse cx="68" cy="60" rx="12" ry="7" fill="white" opacity="0.15" transform="rotate(-25 68 60)" />
+            <ellipse cx="65" cy="58" rx="6" ry="3" fill="white" opacity="0.3" transform="rotate(-25 65 58)" />
+            <ellipse cx="80" cy="80" rx="58" ry="16" fill="none" stroke="url(#pRing)" strokeWidth="3" transform="rotate(-20 80 80)" />
+            <circle cx="36" cy="72" r="3" fill="#22d3ee" opacity="0.9" />
+            <circle cx="124" cy="88" r="2.5" fill="#f0abfc" opacity="0.8" />
         </svg>
     );
-}
+});
 
-function AsteroidCard({
+const FeatureCard = memo(function FeatureCard({
     feature,
-    index,
     isVisible,
 }: {
     feature: typeof features[0];
-    index: number;
     isVisible: boolean;
 }) {
     const Icon = feature.icon;
     const isLeft = feature.side === 'left';
-    const clipId = `asteroid-clip-${index}`;
 
     return (
         <motion.div
-            initial={{
-                opacity: 0,
-                x: isLeft ? -80 : 80,
-                scale: 0.7,
-            }}
-            animate={isVisible ? {
-                opacity: 1,
-                x: 0,
-                scale: 1,
-            } : {
-                opacity: 0,
-                x: isLeft ? -80 : 80,
-                scale: 0.7,
-            }}
-            transition={{
-                duration: 0.9,
-                ease: [0.22, 1, 0.36, 1],
-            }}
+            initial={{ opacity: 0, x: isLeft ? -50 : 50 }}
+            animate={isVisible ? { opacity: 1, x: 0 } : { opacity: 0, x: isLeft ? -50 : 50 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
             className={`relative ${isLeft ? 'mr-auto' : 'ml-auto'}`}
-            style={{ width: '280px', height: '180px' }}
+            style={{ width: '280px' }}
         >
-            <svg
-                className="absolute inset-0 w-full h-full"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-            >
-                <defs>
-                    <clipPath id={clipId}>
-                        <path d={feature.asteroidShape} />
-                    </clipPath>
-                    <linearGradient id={`asteroid-grad-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="rgba(168, 85, 247, 0.2)" />
-                        <stop offset="50%" stopColor="rgba(99, 102, 241, 0.15)" />
-                        <stop offset="100%" stopColor="rgba(34, 211, 238, 0.1)" />
-                    </linearGradient>
-                </defs>
+            <div className="relative rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-cyan-500/5 border border-primary/20 p-5">
+                <div className="absolute inset-0 rounded-2xl bg-background/40" />
 
-                <path
-                    d={feature.asteroidShape}
-                    fill={`url(#asteroid-grad-${index})`}
-                    stroke="rgba(168, 85, 247, 0.4)"
-                    strokeWidth="0.8"
-                />
-
-                <g opacity="0.15" stroke="rgba(168, 85, 247, 0.5)" strokeWidth="0.3" clipPath={`url(#${clipId})`}>
-                    <line x1="20" y1="30" x2="45" y2="35" />
-                    <line x1="55" y1="60" x2="75" y2="55" />
-                    <line x1="30" y1="70" x2="50" y2="75" />
-                </g>
-            </svg>
-
-            <div className="absolute inset-0 flex flex-col justify-center p-6 pl-8">
-                <motion.div
-                    className="absolute top-4 right-8 w-1.5 h-1.5 rounded-full bg-primary/50"
-                    animate={isVisible ? {
-                        y: [0, -6, 0],
-                        opacity: [0.5, 0.9, 0.5],
-                    } : {}}
-                    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <motion.div
-                    className="absolute bottom-6 left-10 w-1 h-1 rounded-full bg-cyan-400/40"
-                    animate={isVisible ? {
-                        y: [0, -4, 0],
-                        opacity: [0.4, 0.7, 0.4],
-                    } : {}}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
-                />
-
-                <motion.div
-                    className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/25 to-cyan-500/15 flex items-center justify-center mb-3 backdrop-blur-sm border border-primary/20"
-                    animate={isVisible ? {
-                        boxShadow: [
-                            '0 0 15px rgba(168, 85, 247, 0.25)',
-                            '0 0 25px rgba(168, 85, 247, 0.4)',
-                            '0 0 15px rgba(168, 85, 247, 0.25)',
-                        ],
-                    } : {}}
-                    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                    <Icon className="w-6 h-6 text-primary" />
-                </motion.div>
-
-                <h3 className="text-base font-semibold text-foreground mb-1.5">{feature.title}</h3>
-                <p className="text-xs text-muted-foreground/85 leading-relaxed">{feature.description}</p>
+                <div className="relative z-10">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/20 to-cyan-500/10 flex items-center justify-center mb-3 border border-primary/15 shadow-lg shadow-primary/10 text-primary">
+                        <Icon />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground mb-1.5">{feature.title}</h3>
+                    <p className="text-xs text-muted-foreground/85 leading-relaxed">{feature.description}</p>
+                </div>
             </div>
         </motion.div>
     );
-}
+});
 
 export function FutureOfStudySection() {
     const containerRef = useRef<HTMLDivElement>(null);
     const pathRef = useRef<SVGPathElement>(null);
     const [pathLength, setPathLength] = useState(0);
     const [visibleCards, setVisibleCards] = useState<boolean[]>([false, false, false, false]);
-    const [planetPos, setPlanetPos] = useState({ x: 300, y: 20 });
+    const lastUpdateRef = useRef(0);
 
     const { scrollYProgress } = useScroll({
         target: containerRef,
         offset: ['start 0.8', 'end 0.5'],
     });
 
-    const springProgress = useSpring(scrollYProgress, {
-        stiffness: 50,
-        damping: 20,
-        restDelta: 0.0001,
+    const smoothProgress = useTransform(scrollYProgress, [0, 1], [0, 1]);
+
+    const planetX = useTransform(smoothProgress, (p) => {
+        if (!pathRef.current || pathLength === 0) return 0;
+        const point = pathRef.current.getPointAtLength(Math.min(1, Math.max(0, p)) * pathLength);
+        return point.x - 300;
     });
 
-    // TOGGLE SPRING ANIMATION HERE
-    const USE_SPRING = true;
-    const activeProgress = USE_SPRING ? springProgress : scrollYProgress;
+    const planetY = useTransform(smoothProgress, (p) => {
+        if (!pathRef.current || pathLength === 0) return 20;
+        const point = pathRef.current.getPointAtLength(Math.min(1, Math.max(0, p)) * pathLength);
+        return point.y;
+    });
 
     useEffect(() => {
         if (pathRef.current) {
@@ -264,28 +200,26 @@ export function FutureOfStudySection() {
         }
     }, []);
 
-    useEffect(() => {
-        const updateFromProgress = (progress: number) => {
-            const newVisibleCards = features.map((feature) => progress >= feature.position - 0.05);
-            setVisibleCards(prev => {
-                if (prev.some((v, i) => v !== newVisibleCards[i])) {
-                    return newVisibleCards;
-                }
-                return prev;
-            });
+    const updateVisibility = useCallback((progress: number) => {
+        const now = performance.now();
+        if (now - lastUpdateRef.current < 30) return;
+        lastUpdateRef.current = now;
 
-            if (pathRef.current && pathLength > 0) {
-                const clampedProgress = Math.max(0, Math.min(1, progress));
-                const point = pathRef.current.getPointAtLength(clampedProgress * pathLength);
-                setPlanetPos({ x: point.x, y: point.y });
+        const newVisibleCards = features.map((feature) => progress >= feature.position - 0.15);
+        setVisibleCards(prev => {
+            if (prev.some((v, i) => v !== newVisibleCards[i])) {
+                return newVisibleCards;
             }
-        };
+            return prev;
+        });
+    }, []);
 
-        const unsubscribe = activeProgress.on('change', updateFromProgress);
+    useEffect(() => {
+        const unsubscribe = smoothProgress.on('change', updateVisibility);
         return () => unsubscribe();
-    }, [activeProgress, pathLength]);
+    }, [smoothProgress, updateVisibility]);
 
-    const pathD = "M 300 20 Q 100 120, 380 240 Q 520 340, 220 460 Q 80 560, 350 700 Q 480 800, 300 880";
+    const pathD = "M 300 20 C 100 80, 100 160, 380 240 S 520 400, 220 460 S 80 600, 350 700 S 480 860, 300 880";
 
     return (
         <section
@@ -296,26 +230,14 @@ export function FutureOfStudySection() {
                 minHeight: '1100px',
             }}
         >
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <motion.div
-                    className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full opacity-10"
-                    style={{
-                        background: 'radial-gradient(ellipse, hsl(var(--primary)) 0%, transparent 70%)',
-                    }}
-                    animate={{
-                        scale: [1, 1.08, 1],
-                        opacity: [0.1, 0.15, 0.1],
-                    }}
-                    transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-                />
-            </div>
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full opacity-10 pointer-events-none" style={{ background: 'radial-gradient(ellipse, hsl(var(--primary)) 0%, transparent 70%)' }} />
 
             <div className="container mx-auto px-6 relative">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-50px' }}
-                    transition={{ duration: 0.6 }}
+                    transition={{ duration: 0.5 }}
                     className="text-center mb-12"
                 >
                     <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
@@ -341,71 +263,42 @@ export function FutureOfStudySection() {
                             ref={pathRef}
                             d={pathD}
                             fill="none"
-                            stroke="hsl(var(--primary)/0.35)"
-                            strokeWidth="3"
+                            stroke="hsl(var(--primary)/0.3)"
+                            strokeWidth="2"
                             strokeDasharray="4 16"
                             strokeLinecap="round"
-                            style={{
-                                maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-                                WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-                            }}
-                        />
-
-                        <path
-                            d={pathD}
-                            fill="none"
-                            stroke="hsl(var(--primary)/0.15)"
-                            strokeWidth="1.5"
-                            strokeDasharray="2 20"
-                            strokeLinecap="round"
-                            strokeDashoffset="10"
-                            style={{
-                                maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-                                WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-                            }}
                         />
 
                         <motion.path
                             d={pathD}
                             fill="none"
                             stroke="url(#trailGradient)"
-                            strokeWidth="4"
+                            strokeWidth="3"
                             strokeLinecap="round"
                             initial={{ pathLength: 0 }}
-                            style={{
-                                pathLength: activeProgress,
-                            }}
+                            style={{ pathLength: smoothProgress }}
                         />
 
                         <defs>
                             <linearGradient id="trailGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="#a855f7" stopOpacity="0.6" />
-                                <stop offset="40%" stopColor="#8b5cf6" stopOpacity="0.8" />
-                                <stop offset="70%" stopColor="#6366f1" stopOpacity="0.7" />
-                                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.5" />
+                                <stop offset="0%" stopColor="#a855f7" stopOpacity="0.5" />
+                                <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.4" />
                             </linearGradient>
                         </defs>
                     </svg>
 
                     <motion.div
-                        className="absolute z-20 pointer-events-none"
-                        animate={{
-                            x: planetPos.x - 300,
-                            y: planetPos.y,
-                        }}
-                        transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                        className="absolute z-20 pointer-events-none will-change-transform"
                         style={{
                             left: '50%',
+                            x: planetX,
+                            y: planetY,
                             translateX: '-50%',
                             translateY: '-50%',
                         }}
                     >
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
-                        >
-                            <Planet />
-                        </motion.div>
+                        <Planet />
                     </motion.div>
 
                     <div className="absolute inset-0 flex flex-col justify-between py-6">
@@ -415,11 +308,7 @@ export function FutureOfStudySection() {
                                 className={`flex ${feature.side === 'left' ? 'justify-start pl-2 md:pl-6' : 'justify-end pr-2 md:pr-6'}`}
                                 style={{ width: '100%' }}
                             >
-                                <AsteroidCard
-                                    feature={feature}
-                                    index={index}
-                                    isVisible={visibleCards[index]}
-                                />
+                                <FeatureCard feature={feature} isVisible={visibleCards[index]} />
                             </div>
                         ))}
                     </div>
@@ -428,11 +317,8 @@ export function FutureOfStudySection() {
 
             <div
                 className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-                style={{
-                    background: 'linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)',
-                }}
+                style={{ background: 'linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)' }}
             />
         </section>
     );
 }
-

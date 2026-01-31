@@ -1,8 +1,13 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2, Target, Trophy } from 'lucide-react';
 import { CurriculumTree } from '@/components/curriculum/CurriculumTree';
 import { useCurriculum } from '@/hooks/useCurriculum';
+import { RevisionModal } from '@/components/revision/RevisionModal';
+import { api } from '@/lib/api';
+import { createOrGetUser } from '@/logic/userSession';
+import { useUser } from '@clerk/clerk-react';
 import type { Module, Subtopic } from '@/types/curriculum';
 import { OrbitLogo } from '@/components/brand/OrbitLogo';
 
@@ -11,9 +16,30 @@ export default function CurriculumPage() {
   const [searchParams] = useSearchParams();
   const curriculumId = searchParams.get('id') || undefined;
   const { data, isLoading, error } = useCurriculum(curriculumId);
+  const { user, isLoaded } = useUser();
+  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [revisionMilestone, setRevisionMilestone] = useState<number | null>(null);
+  const [milestoneReady, setMilestoneReady] = useState(false);
+
+  useEffect(() => {
+    if (data?.curriculum_id && uid) {
+      api.checkRevisionMilestone(uid, data.curriculum_id).then(result => {
+        if (result.ready && result.milestone) {
+          setRevisionMilestone(result.milestone);
+          setMilestoneReady(true);
+        }
+      }).catch(console.error);
+    }
+  }, [data?.curriculum_id, uid]);
 
   const handleStartLesson = (subtopicId: string) => {
     navigate(`/learn/${subtopicId}`);
+  };
+
+  const handleOpenRevision = () => {
+    setRevisionModalOpen(true);
   };
 
   if (isLoading) {
@@ -65,6 +91,35 @@ export default function CurriculumPage() {
       </header>
 
       <main className="container mx-auto px-6 py-8 max-w-4xl">
+        {milestoneReady && revisionMilestone && data?.curriculum_id && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-gradient-to-r from-primary/20 to-cyan-500/20 border border-primary/30 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/30 flex items-center justify-center">
+                {revisionMilestone === 100 ? <Trophy className="w-5 h-5 text-primary" /> : <Target className="w-5 h-5 text-primary" />}
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {revisionMilestone === 100 ? 'Final Test Ready!' : `${revisionMilestone}% Milestone Reached!`}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {revisionMilestone === 100 ? 'Complete your final comprehensive test' : 'Review weak topics and test your knowledge'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenRevision}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+            >
+              {revisionMilestone === 100 ? 'Take Final Test' : 'Start Revision'}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
         {modules.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -126,6 +181,17 @@ export default function CurriculumPage() {
           onStartLesson={handleStartLesson}
         />
       </main>
+
+      {data?.curriculum_id && revisionMilestone && (
+        <RevisionModal
+          isOpen={revisionModalOpen}
+          onClose={() => setRevisionModalOpen(false)}
+          userId={uid}
+          curriculumId={data.curriculum_id}
+          milestone={revisionMilestone}
+        />
+      )}
     </div>
   );
 }
+

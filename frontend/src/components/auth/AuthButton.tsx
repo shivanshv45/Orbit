@@ -1,20 +1,7 @@
-import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@clerk/clerk-react';
+import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/clerk-react';
 import { motion } from 'framer-motion';
-import { createOrGetUser } from '@/logic/userSession';
-import { useEffect } from 'react';
 
 export function AuthButton() {
-    const { user } = useUser();
-
-    useEffect(() => {
-        if (user) {
-            createOrGetUser({
-                id: user.id,
-                fullName: user.fullName
-            });
-        }
-    }, [user]);
-
     return (
         <>
             <SignedOut>
@@ -33,6 +20,7 @@ export function AuthButton() {
             </SignedOut>
             <SignedIn>
                 <UserButton
+                    afterSignOutUrl="/"
                     appearance={{
                         elements: {
                             avatarBox: "w-10 h-10 rounded-lg border-2 border-primary/20",
