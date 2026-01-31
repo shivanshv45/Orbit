@@ -127,6 +127,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                         return (
                             <motion.button
                                 key={index}
+                                data-option={String.fromCharCode(65 + index)}
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.05 }}
@@ -284,6 +285,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                         </button>
                     ) : (
                         <button
+                            data-submit-btn="true"
                             onClick={handleSubmit}
                             disabled={
                                 (question.questionType === 'mcq' && selectedAnswer === null) ||

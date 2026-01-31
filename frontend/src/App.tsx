@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AccessibilityManager } from "./components/accessibility/AccessibilityManager";
 import LandingPage from "./pages/LandingPage";
 import CurriculumPage from "./pages/CurriculumPage";
 import LearnPage from "./pages/LearnPage";
@@ -16,13 +17,15 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-                <Routes>
-                    <Route path="/" element={<LandingPage />} />
-                    <Route path="/curriculum" element={<CurriculumPage />} />
-                    <Route path="/learn/:subtopicId" element={<LearnPage />} />
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<NotFound />} />
-                </Routes>
+                <AccessibilityManager>
+                    <Routes>
+                        <Route path="/" element={<LandingPage />} />
+                        <Route path="/curriculum" element={<CurriculumPage />} />
+                        <Route path="/learn/:subtopicId" element={<LearnPage />} />
+                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                        <Route path="*" element={<NotFound />} />
+                    </Routes>
+                </AccessibilityManager>
             </BrowserRouter>
         </TooltipProvider>
     </QueryClientProvider>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb, Sparkles } from 'lucide-react';
+import { Lightbulb, Sparkles, Mic, MicOff, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
@@ -8,18 +8,38 @@ import { SimulationBlock } from '@/components/teaching/SimulationBlock';
 import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
+import { useVoiceMode } from '@/lib/voice/useVoiceMode';
+import { VoiceSettings } from './VoiceSettings';
+import { formatFormula } from '@/lib/formatFormula';
 
 interface TeachingCanvasProps {
   blocks: TeachingBlock[];
   subtopicId: string;
   onNext: () => void;
+  onPrevious?: () => void;
   hasNext: boolean;
+  hasPrevious?: boolean;
+  voiceModeEnabled?: boolean;
+  // Lesson-level navigation (for voice commands)
+  onNextLesson?: () => void;
+  onPreviousLesson?: () => void;
 }
 
-export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: TeachingCanvasProps) {
+export function TeachingCanvas({
+  blocks,
+  subtopicId,
+  onNext,
+  onPrevious,
+  hasNext,
+  hasPrevious = false,
+  voiceModeEnabled = false,
+  onNextLesson,
+  onPreviousLesson,
+}: TeachingCanvasProps) {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [askAIOpen, setAskAIOpen] = useState<number | null>(null);
   const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [questionAnswered, setQuestionAnswered] = useState<Record<number, boolean>>({});
   const [questionScores, setQuestionScores] = useState<Record<number, number>>({});
   const { uid } = createOrGetUser();
@@ -137,22 +157,34 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         // Calculate responsive styling based on formula length
         const formulaLength = block.formula?.length || 0;
         const isLongFormula = formulaLength > 50;
-        const isVeryLongFormula = formulaLength > 80;
+        const isVeryLongFormula = formulaLength > 100;
 
         return (
           <div className={cn(
-            "my-6 rounded-2xl bg-accent/50 border border-primary/20 text-center transition-all",
-            isVeryLongFormula ? "p-6 w-full" : isLongFormula ? "p-8 max-w-4xl mx-auto" : "p-8 max-w-2xl mx-auto"
+            "relative p-8 rounded-2xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20",
+            "backdrop-blur-sm"
           )}>
-            <div className={cn(
-              "font-serif text-foreground mb-2 break-words leading-relaxed",
-              isVeryLongFormula ? "text-xl md:text-2xl px-4" : isLongFormula ? "text-2xl md:text-3xl" : "text-4xl"
-            )}>
-              {block.formula}
+            {/* Formula Display */}
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className={cn(
+                "font-mono text-foreground tracking-wide text-center px-6 py-4",
+                "bg-background/50 rounded-xl border border-border/50",
+                "shadow-lg",
+                isVeryLongFormula ? "text-lg md:text-xl" : isLongFormula ? "text-xl md:text-2xl" : "text-2xl md:text-3xl"
+              )}>
+                {/* Clean up LaTeX for better display */}
+                <code className="whitespace-pre-wrap break-words">
+                  {formatFormula(block.formula)}
+                </code>
+              </div>
+
+              {/* Explanation Text */}
+              {block.explanation && (
+                <p className="text-sm text-muted-foreground text-center max-w-2xl leading-relaxed">
+                  {block.explanation}
+                </p>
+              )}
             </div>
-            {block.explanation && (
-              <p className="text-sm text-muted-foreground mt-4 px-4">{block.explanation}</p>
-            )}
           </div>
         );
 
@@ -198,6 +230,25 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
     }
   };
 
+  // Initialize voice mode if enabled (after all function definitions)
+  const { isListening, startListening, stopListening, speakText, updatePreferences } = useVoiceMode({
+    enabled: voiceModeEnabled,
+    blocks,
+    currentBlockIndex: currentChunkIndex,
+    subtopicId,
+    onNext: handleContinue,
+    onPrevious: onPrevious || (() => { }),
+    onRepeat: () => {
+      // Re-speak the current block content
+      const currentBlock = blocks[currentChunkIndex];
+      if (currentBlock && speakText) {
+        speakText(getTextContent(currentBlock));
+      }
+    },
+    onNextLesson,
+    onPreviousLesson,
+  });
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -205,16 +256,29 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         animate={{ opacity: 1, y: 0 }}
         className="space-y-2"
       >
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>{currentChunkIndex + 1} of {blocks.length} sections</span>
-          <div className="flex-1 max-w-32 h-1 rounded-full bg-muted overflow-hidden">
-            <motion.div
-              className="h-full bg-primary rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${((currentChunkIndex + 1) / blocks.length) * 100}%` }}
-              transition={{ duration: 0.3 }}
-            />
+        <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 flex-1">
+            <span>{currentChunkIndex + 1} of {blocks.length} sections</span>
+            <div className="flex-1 max-w-32 h-1 rounded-full bg-muted overflow-hidden">
+              <motion.div
+                className="h-full bg-primary rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${((currentChunkIndex + 1) / blocks.length) * 100}%` }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
           </div>
+
+          {/* Voice Settings Button in Header */}
+          {voiceModeEnabled && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Voice settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -282,6 +346,7 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         </AnimatePresence>
       </div>
 
+
       <motion.div
         key={`continue-${currentChunkIndex}`}
         initial={{ opacity: 0, y: 10 }}
@@ -289,19 +354,52 @@ export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: Teaching
         transition={{ delay: 0.2 }}
         className="pt-4"
       >
-        <button
-          onClick={handleContinue}
-          disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
-          className={cn(
-            "w-full h-14 rounded-2xl font-medium text-lg transition-all duration-300",
-            currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]
-              ? "bg-muted text-muted-foreground cursor-not-allowed"
-              : "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-glow"
+        <div className="flex gap-3 items-center">
+          {/* Continue Button */}
+          <button
+            onClick={handleContinue}
+            disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
+            className={cn(
+              "flex-1 h-14 rounded-2xl font-medium text-lg transition-all duration-300",
+              currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-glow"
+            )}
+          >
+            {hasMoreChunks ? 'Continue' : (hasNext ? 'Next Lesson' : 'Complete')}
+          </button>
+
+          {voiceModeEnabled && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={isListening ? stopListening : startListening}
+              className={cn(
+                "h-14 w-14 rounded-2xl transition-all duration-200 flex items-center justify-center",
+                "border-2 shadow-lg",
+                isListening
+                  ? "bg-red-500 border-red-600 hover:bg-red-600 animate-pulse"
+                  : "bg-primary/10 border-primary/30 hover:bg-primary/20"
+              )}
+              aria-label={isListening ? "Stop listening" : "Start listening"}
+            >
+              {isListening ? (
+                <MicOff className="w-6 h-6 text-red-500" />
+              ) : (
+                <Mic className="w-6 h-6 text-primary" />
+              )}
+            </motion.button>
           )}
-        >
-          {hasMoreChunks ? 'Continue' : (hasNext ? 'Next Lesson' : 'Complete')}
-        </button>
+        </div>
       </motion.div>
+
+      {/* Voice Settings Modal */}
+      <VoiceSettings
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onPreferencesChange={updatePreferences}
+        onTestVoice={speakText}
+      />
     </div>
   );
 }
