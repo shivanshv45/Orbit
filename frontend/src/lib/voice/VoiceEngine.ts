@@ -73,6 +73,18 @@ export class VoiceEngine {
         this.recognition.onerror = (event) => {
             this.isListening = false;
 
+            // In continuous mode, some errors are expected (like no-speech) - just restart
+            const nonFatalErrors = ['no-speech', 'aborted', 'network'];
+            if (this.continuousMode && nonFatalErrors.includes(event.error)) {
+                // Silently restart listening for non-fatal errors
+                setTimeout(() => {
+                    if (this.continuousMode && !this.isSpeaking) {
+                        this.startListening();
+                    }
+                }, 300);
+                return;
+            }
+
             const error = new Error(`Speech recognition error: ${event.error}`);
             if (this.config.onError) {
                 this.config.onError(error);
@@ -84,6 +96,15 @@ export class VoiceEngine {
                     utterance: '',
                     timestamp: Date.now(),
                 });
+            }
+
+            // Still try to restart in continuous mode for other errors
+            if (this.continuousMode) {
+                setTimeout(() => {
+                    if (this.continuousMode && !this.isSpeaking) {
+                        this.startListening();
+                    }
+                }, 1000);
             }
         };
 

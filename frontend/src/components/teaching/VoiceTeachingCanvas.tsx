@@ -98,11 +98,21 @@ export function VoiceTeachingCanvas({
     useEffect(() => {
         if (voiceEngineRef.current) {
             voiceEngineRef.current.setContinuousMode(isAccessibilityModeOn);
+
             if (isAccessibilityModeOn) {
                 setIsListening(true);
+                // Auto-start listening immediately
+                voiceEngineRef.current.startListening();
+
+                // If we're in IDLE state, give lesson-specific instructions (delay to avoid overlap with toggle announcement)
+                if (currentState === 'IDLE' && !showResumePrompt) {
+                    setTimeout(() => {
+                        voiceEngineRef.current?.speak('Say "start" to begin the lesson, or "help" for available commands.');
+                    }, 2000);
+                }
             }
         }
-    }, [isAccessibilityModeOn]);
+    }, [isAccessibilityModeOn, currentState, showResumePrompt]);
 
     // Save progress whenever key state changes
     const saveProgress = useCallback(() => {
