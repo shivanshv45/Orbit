@@ -8,6 +8,8 @@ interface Curriculum {
     id: string;
     title: string;
     created_at: string;
+    is_pinned?: boolean;
+    is_archived?: boolean;
 }
 
 async function fetchCurriculums(userId: string): Promise<{ curriculums: Curriculum[] }> {
