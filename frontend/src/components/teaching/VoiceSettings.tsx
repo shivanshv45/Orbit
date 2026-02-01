@@ -1,7 +1,4 @@
-/**
- * Voice Settings Panel
- * Accessible UI and voice-controlled settings for voice mode
- */
+
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,7 +20,7 @@ export function VoiceSettings({
 }: VoiceSettingsProps) {
     const [preferences, setPreferences] = useState<VoicePreferences>(loadVoicePreferences());
 
-    // Load preferences on mount
+
     useEffect(() => {
         setPreferences(loadVoicePreferences());
     }, [isOpen]);
@@ -55,7 +52,7 @@ export function VoiceSettings({
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
                     className="relative w-full max-w-lg mx-4 p-6 bg-background rounded-2xl shadow-2xl border border-border"
                 >
-                    {/* Header */}
+
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -74,9 +71,9 @@ export function VoiceSettings({
                         </button>
                     </div>
 
-                    {/* Settings Grid */}
+
                     <div className="space-y-6">
-                        {/* Speech Rate */}
+
                         <div className="space-y-2">
                             <label
                                 htmlFor="speech-rate"
@@ -105,7 +102,7 @@ export function VoiceSettings({
                             </p>
                         </div>
 
-                        {/* Pitch */}
+
                         <div className="space-y-2">
                             <label
                                 htmlFor="pitch"
@@ -134,7 +131,7 @@ export function VoiceSettings({
                             </p>
                         </div>
 
-                        {/* Volume */}
+
                         <div className="space-y-2">
                             <label
                                 htmlFor="volume"
@@ -163,7 +160,7 @@ export function VoiceSettings({
                             </p>
                         </div>
 
-                        {/* Voice Gender */}
+
                         <div className="space-y-2">
                             <label htmlFor="voice-gender" className="flex items-center gap-2 text-sm font-medium">
                                 <User className="w-4 h-4" />
@@ -186,7 +183,7 @@ export function VoiceSettings({
                             </p>
                         </div>
 
-                        {/* Verbosity Level */}
+
                         <div className="space-y-2">
                             <label htmlFor="verbosity" className="flex items-center gap-2 text-sm font-medium">
                                 <Languages className="w-4 h-4" />
@@ -210,7 +207,7 @@ export function VoiceSettings({
                         </div>
                     </div>
 
-                    {/* Test Voice Button */}
+
                     <button
                         onClick={handleTestVoice}
                         className="w-full mt-6 px-4 py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -219,7 +216,7 @@ export function VoiceSettings({
                         Test Voice
                     </button>
 
-                    {/* Voice command hint */}
+
                     <p
                         className="text-xs text-center text-muted-foreground mt-4"
                         role="status"

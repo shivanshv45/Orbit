@@ -20,7 +20,7 @@ interface TeachingCanvasProps {
   hasNext: boolean;
   hasPrevious?: boolean;
   voiceModeEnabled?: boolean;
-  // Lesson-level navigation (for voice commands)
+
   onNextLesson?: () => void;
   onPreviousLesson?: () => void;
 }
@@ -127,12 +127,12 @@ export function TeachingCanvas({
   };
 
   const renderMarkdownContent = (content: string) => {
-    // Split by **text** pattern
+
     const parts = content.split(/(\*\*.*?\*\*)/g);
 
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        // Remove ** and style as bold purple
+
         const text = part.slice(2, -2);
         return (
           <strong key={index} className="font-semibold text-primary">
@@ -154,7 +154,7 @@ export function TeachingCanvas({
         );
 
       case 'formula':
-        // Calculate responsive styling based on formula length
+
         const formulaLength = block.formula?.length || 0;
         const isLongFormula = formulaLength > 50;
         const isVeryLongFormula = formulaLength > 100;
@@ -164,7 +164,7 @@ export function TeachingCanvas({
             "relative p-8 rounded-2xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20",
             "backdrop-blur-sm"
           )}>
-            {/* Formula Display */}
+
             <div className="flex flex-col items-center justify-center gap-4">
               <div className={cn(
                 "font-mono text-foreground tracking-wide text-center px-6 py-4",
@@ -172,13 +172,13 @@ export function TeachingCanvas({
                 "shadow-lg",
                 isVeryLongFormula ? "text-lg md:text-xl" : isLongFormula ? "text-xl md:text-2xl" : "text-2xl md:text-3xl"
               )}>
-                {/* Clean up LaTeX for better display */}
+
                 <code className="whitespace-pre-wrap break-words">
                   {formatFormula(block.formula)}
                 </code>
               </div>
 
-              {/* Explanation Text */}
+
               {block.explanation && (
                 <p className="text-sm text-muted-foreground text-center max-w-2xl leading-relaxed">
                   {block.explanation}
@@ -230,7 +230,6 @@ export function TeachingCanvas({
     }
   };
 
-  // Initialize voice mode if enabled (after all function definitions)
   const { isListening, startListening, stopListening, speakText, updatePreferences } = useVoiceMode({
     enabled: voiceModeEnabled,
     blocks,
@@ -239,7 +238,7 @@ export function TeachingCanvas({
     onNext: handleContinue,
     onPrevious: onPrevious || (() => { }),
     onRepeat: () => {
-      // Re-speak the current block content
+
       const currentBlock = blocks[currentChunkIndex];
       if (currentBlock && speakText) {
         speakText(getTextContent(currentBlock));
@@ -269,7 +268,7 @@ export function TeachingCanvas({
             </div>
           </div>
 
-          {/* Voice Settings Button in Header */}
+
           {voiceModeEnabled && (
             <button
               onClick={() => setSettingsOpen(true)}
@@ -355,7 +354,7 @@ export function TeachingCanvas({
         className="pt-4"
       >
         <div className="flex gap-3 items-center">
-          {/* Continue Button */}
+
           <button
             onClick={handleContinue}
             disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
@@ -393,7 +392,7 @@ export function TeachingCanvas({
         </div>
       </motion.div>
 
-      {/* Voice Settings Modal */}
+
       <VoiceSettings
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}

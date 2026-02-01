@@ -32,7 +32,11 @@ async def parse_pdfs1(
         if not user_name:
             user_name = "User"
         
-        curriculum_title = files[0].filename.rsplit('.', 1)[0] if files else "Untitled Curriculum"
+        import re
+        raw_title = files[0].filename.rsplit('.', 1)[0] if files else "Untitled Curriculum"
+        curriculum_title = re.sub(r'[^a-zA-Z0-9\s-]', '', raw_title).strip()
+        if not curriculum_title:
+            curriculum_title = "Untitled Curriculum"
         
         user_exist(db, user_id, user_name)
         curriculum_id = upload_to_db(db, modules, user_id, curriculum_title)

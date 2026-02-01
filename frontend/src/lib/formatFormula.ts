@@ -5,77 +5,86 @@
 export function formatFormula(latex: string): string {
     let formatted = latex;
 
-    // Handle \text{} command - extract text content
+
     formatted = formatted.replace(/\\text\s*\{([^}]*)\}/g, ' $1 ');
-
-    // Handle \vec{} command - use hat accent (^ above) which has better font support
-    formatted = formatted.replace(/\\vec\s*\{([A-Za-z])\}/g, (match, letter) => {
-        // Use letter with combining circumflex accent (hat symbol above)
-        return letter + '\u0302'; // Combining circumflex accent
-    });
-
-    // Handle \mathbf{} command - bold the letter  
-    formatted = formatted.replace(/\\mathbf\s*\{([^}]+)\}/g, '**$1**');
-
-    // Handle fractions \frac{a}{b} -> (a)/(b)
-    formatted = formatted.replace(/\\frac\s*\{([^}]+)\}\s*\{([^}]+)\}/g, '($1)/($2)');
-
-    // Spacing commands
+    formatted = formatted.replace(/\\vec\s*\{([A-Za-z])\}/g, '$1\u20D7'); // Combining vector arrow
+    formatted = formatted.replace(/\\mathbf\s*\{([^}]+)\}/g, '$1'); // Just text for now, or use bold in UI
+    formatted = formatted.replace(/\\mathrm\s*\{([^}]+)\}/g, '$1');
     formatted = formatted.replace(/\\quad/g, '    ');
     formatted = formatted.replace(/\\qquad/g, '        ');
+    formatted = formatted.replace(/\\,/g, ' ');
+    formatted = formatted.replace(/\\:/g, ' ');
+    formatted = formatted.replace(/\\;/g, ' ');
 
-    // Greek letters
-    formatted = formatted.replace(/\\alpha/g, 'α');
-    formatted = formatted.replace(/\\beta/g, 'β');
-    formatted = formatted.replace(/\\gamma/g, 'γ');
-    formatted = formatted.replace(/\\delta/g, 'δ');
-    formatted = formatted.replace(/\\epsilon/g, 'ε');
-    formatted = formatted.replace(/\\theta/g, 'θ');
-    formatted = formatted.replace(/\\lambda/g, 'λ');
-    formatted = formatted.replace(/\\mu/g, 'μ');
-    formatted = formatted.replace(/\\pi/g, 'π');
-    formatted = formatted.replace(/\\rho/g, 'ρ');
-    formatted = formatted.replace(/\\sigma/g, 'σ');
-    formatted = formatted.replace(/\\tau/g, 'τ');
-    formatted = formatted.replace(/\\phi/g, 'φ');
-    formatted = formatted.replace(/\\omega/g, 'ω');
-    formatted = formatted.replace(/\\Gamma/g, 'Γ');
-    formatted = formatted.replace(/\\Delta/g, 'Δ');
-    formatted = formatted.replace(/\\Theta/g, 'Θ');
-    formatted = formatted.replace(/\\Lambda/g, 'Λ');
-    formatted = formatted.replace(/\\Sigma/g, 'Σ');
-    formatted = formatted.replace(/\\Omega/g, 'Ω');
 
-    // Trig functions
-    formatted = formatted.replace(/\\sin/g, 'sin');
-    formatted = formatted.replace(/\\cos/g, 'cos');
-    formatted = formatted.replace(/\\tan/g, 'tan');
-    formatted = formatted.replace(/\\log/g, 'log');
-    formatted = formatted.replace(/\\ln/g, 'ln');
+    const replacements: Record<string, string> = {
+        '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ', '\\epsilon': 'ε',
+        '\\zeta': 'ζ', '\\eta': 'η', '\\theta': 'θ', '\\iota': 'ι', '\\kappa': 'κ',
+        '\\lambda': 'λ', '\\mu': 'μ', '\\nu': 'ν', '\\xi': 'ξ', '\\pi': 'π',
+        '\\rho': 'ρ', '\\sigma': 'σ', '\\tau': 'τ', '\\upsilon': 'υ', '\\phi': 'ϕ',
+        '\\chi': 'χ', '\\psi': 'ψ', '\\omega': 'ω',
+        '\\Gamma': 'Γ', '\\Delta': 'Δ', '\\Theta': 'Θ', '\\Lambda': 'Λ',
+        '\\Xi': 'Ξ', '\\Pi': 'Π', '\\Sigma': 'Σ', '\\Phi': 'Φ', '\\Psi': 'Ψ', '\\Omega': 'Ω',
+        '\\sin': 'sin', '\\cos': 'cos', '\\tan': 'tan', '\\cot': 'cot', '\\sec': 'sec', '\\csc': 'csc',
+        '\\log': 'log', '\\ln': 'ln',
+        '\\sqrt': '√', '\\infty': '∞', '\\cdot': '·', '\\times': '×', '\\div': '÷',
+        '\\pm': '±', '\\mp': '∓', '\\leq': '≤', '\\geq': '≥', '\\neq': '≠',
+        '\\approx': '≈', '\\equiv': '≡', '\\partial': '∂', '\\nabla': '∇',
+        '\\int': '∫', '\\sum': '∑', '\\prod': '∏',
+        '\\to': '→', '\\Rightarrow': '⇒', '\\leftrightarrow': '↔', '\\Leftrightarrow': '⇔',
+        '\\ell': 'ℓ', '\\hbar': 'ℏ',
+    };
 
-    // Math symbols
-    formatted = formatted.replace(/\\sqrt/g, '√');
-    formatted = formatted.replace(/\\infty/g, '∞');
-    formatted = formatted.replace(/\\cdot/g, '·');
-    formatted = formatted.replace(/\\times/g, '×');
-    formatted = formatted.replace(/\\div/g, '÷');
-    formatted = formatted.replace(/\\pm/g, '±');
-    formatted = formatted.replace(/\\leq/g, '≤');
-    formatted = formatted.replace(/\\geq/g, '≥');
-    formatted = formatted.replace(/\\neq/g, '≠');
-    formatted = formatted.replace(/\\approx/g, '≈');
-    formatted = formatted.replace(/\\partial/g, '∂');
-    formatted = formatted.replace(/\\nabla/g, '∇');
-    formatted = formatted.replace(/\\int/g, '∫');
-    formatted = formatted.replace(/\\sum/g, '∑');
-    formatted = formatted.replace(/\\to/g, '→');
+    for (const [cmd, repl] of Object.entries(replacements)) {
+        formatted = formatted.split(cmd).join(repl);
+    }
 
-    // Remove curly braces
+
+    while (formatted.includes('\\frac')) {
+        formatted = formatted.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)');
+    }
+
+
+    const supers: Record<string, string> = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', 'n': 'ⁿ', 'i': 'ⁱ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ'
+    };
+
+    const subs: Record<string, string> = {
+        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+        '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', 'a': 'ₐ', 'e': 'ₑ', 'o': 'ₒ', 'x': 'ₓ', 'h': 'ₕ', 'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'p': 'ₚ', 's': 'ₛ', 't': 'ₜ'
+    };
+
+
+    formatted = formatted.replace(/\^\{([^{}]+)\}/g, (_, content) => {
+        return content.split('').map((c: string) => supers[c] || '^' + c).join('');
+    });
+    formatted = formatted.replace(/\^([0-9a-zA-Z])/g, (_, char) => {
+        return supers[char] || '^' + char;
+    });
+
+
+    formatted = formatted.replace(/_\{([^{}]+)\}/g, (_, content) => {
+        return content.split('').map((c: string) => subs[c] || c).join(''); // Fallback to normal char if no sub available
+    });
+
+    formatted = formatted.replace(/_([0-9a-zA-Z])/g, (_, char) => {
+        return subs[char] || char;
+    });
+
+    formatted = formatted.replace(/_([0-9]+)/g, (_, digits) => {
+        return digits.split('').map((d: string) => subs[d] || d).join('');
+    });
+
+    formatted = formatted.replace(/_([i-nxyz])/g, (_, char) => {
+        return subs[char] || '_' + char;
+    });
+
+
     formatted = formatted.replace(/\{/g, '');
     formatted = formatted.replace(/\}/g, '');
 
-    // Remove backslashes  
-    formatted = formatted.replace(/\\/g, '');
+    formatted = formatted.replace(/\s+/g, ' ');
 
     return formatted.trim();
 }

@@ -50,11 +50,11 @@ export function VoiceTeachingCanvas({
     const { uid } = createOrGetUser();
     const { isAccessibilityModeOn } = useAccessibilityModeOptional();
 
-    // Initialize voice engine and state machine
+
     useEffect(() => {
         voiceEngineRef.current = new VoiceEngine({
             onSpeechEnd: () => {
-                // After speaking completes, ready to listen if in teaching/question state
+
                 if (currentState === 'TEACHING' || currentState === 'QUESTION') {
                     startListeningWithDelay();
                 }
@@ -78,10 +78,10 @@ export function VoiceTeachingCanvas({
             onAction: handleStateMachineAction,
         });
 
-        // Start analytics session
+
         analyticsRef.current.startSession(uid, subtopicId);
 
-        // Check for resumable progress
+
         if (hasResumableProgress(subtopicId)) {
             setShowResumePrompt(true);
         } else {
@@ -94,17 +94,17 @@ export function VoiceTeachingCanvas({
         };
     }, [subtopicId, uid]);
 
-    // Enable continuous listening mode when accessibility mode is on
+
     useEffect(() => {
         if (voiceEngineRef.current) {
             voiceEngineRef.current.setContinuousMode(isAccessibilityModeOn);
 
             if (isAccessibilityModeOn) {
                 setIsListening(true);
-                // Auto-start listening immediately
+
                 voiceEngineRef.current.startListening();
 
-                // If we're in IDLE state, give lesson-specific instructions (delay to avoid overlap with toggle announcement)
+
                 if (currentState === 'IDLE' && !showResumePrompt) {
                     setTimeout(() => {
                         voiceEngineRef.current?.speak('Say "start" to begin the lesson, or "help" for available commands.');
@@ -114,7 +114,7 @@ export function VoiceTeachingCanvas({
         }
     }, [isAccessibilityModeOn, currentState, showResumePrompt]);
 
-    // Save progress whenever key state changes
+
     const saveProgress = useCallback(() => {
         const progress: VoiceProgress = {
             subtopicId,
@@ -127,7 +127,7 @@ export function VoiceTeachingCanvas({
         saveVoiceProgress(progress);
     }, [subtopicId, currentBlockIndex, currentState, questionAnswered, questionScores]);
 
-    // Handle resume from saved progress
+
     const handleResume = () => {
         const progress = loadVoiceProgress(subtopicId);
         if (progress) {
@@ -140,14 +140,14 @@ export function VoiceTeachingCanvas({
         startLesson();
     };
 
-    // Handle starting fresh
+
     const handleStartFresh = () => {
         initializeVoiceProgress(subtopicId);
         setShowResumePrompt(false);
         startLesson();
     };
 
-    // Start the lesson
+
     const startLesson = () => {
         console.log('[Voice Debug] Starting lesson, transitioning to TEACHING');
         stateMachineRef.current?.transitionTo('TEACHING');
@@ -155,14 +155,14 @@ export function VoiceTeachingCanvas({
         speakCurrentBlock();
     };
 
-    // Speak the current block
+
     const speakCurrentBlock = useCallback(() => {
         if (!voiceEngineRef.current || currentBlockIndex >= blocks.length) return;
 
         const block = blocks[currentBlockIndex];
         const scripts = contentConverterRef.current.convertBlock(block, currentBlockIndex, blocks.length);
 
-        // Speak each script sequentially
+
         scripts.forEach((script, index) => {
             setTimeout(() => {
                 voiceEngineRef.current?.speak(script.text);
@@ -172,7 +172,7 @@ export function VoiceTeachingCanvas({
             }, index * 100);
         });
 
-        // If it's a question, transition to QUESTION state
+
         if (block.type === 'question') {
             setTimeout(() => {
                 stateMachineRef.current?.transitionTo('QUESTION');
@@ -180,7 +180,7 @@ export function VoiceTeachingCanvas({
         }
     }, [blocks, currentBlockIndex]);
 
-    // Start listening with a small delay
+
     const startListeningWithDelay = () => {
         setTimeout(() => {
             voiceEngineRef.current?.startListening();
@@ -188,7 +188,7 @@ export function VoiceTeachingCanvas({
         }, 500);
     };
 
-    // Handle voice commands
+
     const handleVoiceCommand = (transcript: string, confidence: number) => {
         console.log('[Voice Debug] Transcript received:', transcript);
         console.log('[Voice Debug] Current state:', currentState);
@@ -217,7 +217,7 @@ export function VoiceTeachingCanvas({
         }
     };
 
-    // Handle state machine actions
+
     const handleStateMachineAction = (action: string, parameters?: Record<string, any>) => {
         switch (action) {
             case 'start_lesson':
@@ -313,7 +313,7 @@ export function VoiceTeachingCanvas({
         }
     };
 
-    // Handle question answers
+
     const handleAnswer = (parameters?: Record<string, any>) => {
         const currentBlock = blocks[currentBlockIndex];
         if (currentBlock.type !== 'question') return;
@@ -321,7 +321,7 @@ export function VoiceTeachingCanvas({
         let isCorrect = false;
 
         if (currentBlock.questionType === 'mcq' && parameters?.option) {
-            const optionIndex = parameters.option.charCodeAt(0) - 65; // A=0, B=1, etc.
+            const optionIndex = parameters.option.charCodeAt(0) - 65;
             isCorrect = optionIndex === currentBlock.correctIndex;
         } else if (currentBlock.questionType === 'fill_in_blank' && parameters?.answer) {
             const answer = parameters.answer.toLowerCase().trim();
@@ -330,13 +330,13 @@ export function VoiceTeachingCanvas({
             ) || false;
         }
 
-        // Mark question as answered
+
         setQuestionAnswered(prev => ({ ...prev, [currentBlockIndex]: true }));
 
-        // Calculate score (simplified, always 1.0 for now)
+
         setQuestionScores(prev => ({ ...prev, [currentBlockIndex]: isCorrect ? 1.0 : 0.25 }));
 
-        // Speak feedback
+
         const explanation = isCorrect
             ? currentBlock.explanations.correct
             : currentBlock.explanations.incorrect?.[0] || 'Try again next time.';
@@ -346,32 +346,32 @@ export function VoiceTeachingCanvas({
             voiceEngineRef.current?.speak(script.text);
         });
 
-        // Move to next block after feedback
+
         setTimeout(() => {
             handleStateMachineAction('next_block');
         }, 2000);
     };
 
-    // Complete the lesson
+
     const completeLesson = () => {
         stateMachineRef.current?.transitionTo('COMPLETED');
         speakFeedback('Lesson completed! Great work.');
         saveProgress();
     };
 
-    // Speak feedback message
+
     const speakFeedback = (text: string) => {
         voiceEngineRef.current?.speak(text, true);
     };
 
-    // Handle preferences change
+
     const handlePreferencesChange = (prefs: VoicePreferences) => {
         voiceEngineRef.current?.updatePreferences(prefs);
         setVerbosity(prefs.verbosity);
         contentConverterRef.current.setVerbosity(prefs.verbosity);
     };
 
-    // Handle manual listening toggle
+
     const toggleListening = () => {
         if (isListening) {
             voiceEngineRef.current?.stopListening();
@@ -391,7 +391,7 @@ export function VoiceTeachingCanvas({
             role="main"
             aria-label="Voice Learning Mode"
         >
-            {/* Resume Prompt */}
+
             <AnimatePresence>
                 {showResumePrompt && (
                     <motion.div
@@ -419,7 +419,7 @@ export function VoiceTeachingCanvas({
                 )}
             </AnimatePresence>
 
-            {/* Status Bar */}
+
             <div
                 className="flex items-center justify-between p-4 rounded-2xl bg-muted/50"
                 role="status"
@@ -452,7 +452,7 @@ export function VoiceTeachingCanvas({
                 </div>
             </div>
 
-            {/* Progress */}
+
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                     <span
@@ -478,7 +478,7 @@ export function VoiceTeachingCanvas({
                 </div>
             </div>
 
-            {/* Listening Indicator */}
+
             <AnimatePresence>
                 {isListening && (
                     <motion.div
@@ -496,7 +496,7 @@ export function VoiceTeachingCanvas({
                 )}
             </AnimatePresence>
 
-            {/* Last Command */}
+
             {lastTranscript && (
                 <div className="p-3 rounded-lg bg-muted/50 text-sm">
                     <span className="text-muted-foreground">Last command: </span>
@@ -504,7 +504,7 @@ export function VoiceTeachingCanvas({
                 </div>
             )}
 
-            {/* Controls */}
+
             <div className="flex gap-3">
                 {currentState === 'IDLE' && (
                     <button
@@ -545,7 +545,7 @@ export function VoiceTeachingCanvas({
                 )}
             </div>
 
-            {/* Voice Settings */}
+
             <VoiceSettings
                 isOpen={settingsOpen}
                 onClose={() => setSettingsOpen(false)}

@@ -29,6 +29,12 @@ export default function CurriculumPage() {
         if (result.ready && result.milestone) {
           setRevisionMilestone(result.milestone);
           setMilestoneReady(true);
+
+          // Check for active cached session to resume
+          const cacheKey = `revision_${uid}_${data.curriculum_id}_${result.milestone}`;
+          if (localStorage.getItem(cacheKey)) {
+            setRevisionModalOpen(true);
+          }
         }
       }).catch(console.error);
     }

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, Trophy, Target, Sparkles } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, Trophy, Target, Sparkles, Calculator } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatFormula } from '@/lib/formatFormula';
 
 interface RevisionNote {
     topic: string;
@@ -42,6 +43,43 @@ interface QuestionState {
     showAnswer: boolean;
 }
 
+const renderFormattedText = (text: string) => {
+    if (!text) return null;
+
+    const processedText = text.replace(
+        /([.?!])\s+(Given|Substituting|To calculate|Calculate|Where|Thus|Therefore|Hence|Note|Step \d|Here)/g,
+        "$1\n\n$2"
+    );
+
+    return processedText.split('\n').map((line, i) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return <br key={i} />;
+
+        const isFormula = trimmedLine.includes('=') && (
+            trimmedLine.includes('∂') ||
+            trimmedLine.includes('∫') ||
+            trimmedLine.includes('∑') ||
+            trimmedLine.length > 20
+        );
+
+        const parts = line.split(/(\*\*.*?\*\*|`.*?`)/g);
+
+        return (
+            <p key={i} className={`mb-3 last:mb-0 leading-relaxed ${isFormula ? 'font-mono text-sm bg-muted/50 p-3 rounded-lg border-l-4 border-primary my-3 shadow-sm' : ''}`}>
+                {parts.map((part, j) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                        return <strong key={j} className="text-foreground font-semibold">{part.slice(2, -2)}</strong>;
+                    }
+                    if (part.startsWith('`') && part.endsWith('`')) {
+                        return <code key={j} className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary text-xs border border-border">{part.slice(1, -1)}</code>;
+                    }
+                    return <span key={j}>{part}</span>;
+                })}
+            </p>
+        );
+    });
+};
+
 export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone }: RevisionModalProps) {
     const [phase, setPhase] = useState<Phase>('loading');
     const [notes, setNotes] = useState<RevisionNote[]>([]);
@@ -53,6 +91,42 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
     const [score, setScore] = useState({ correct: 0, total: 0 });
 
     const loadRevisionContent = useCallback(async () => {
+        const cacheKey = `revision_${userId}_${curriculumId}_${milestone}`;
+        const cached = localStorage.getItem(cacheKey);
+
+        if (cached) {
+            try {
+                const data = JSON.parse(cached);
+                setNotes(data.notes);
+                setQuestions(data.questions);
+
+                const states = new Map<string, QuestionState>();
+                data.questions.forEach((q: RevisionQuestion) => {
+                    states.set(q.id, { answered: false, attempts: 0, correct: false, showAnswer: false });
+                });
+
+                if (data.progress) {
+                    setCurrentNoteIndex(data.progress.noteIndex || 0);
+                    setCurrentQuestionIndex(data.progress.questionIndex || 0);
+                    setPhase(data.progress.phase || 'notes');
+                    if (data.progress.questionStates) {
+                        const savedStates = new Map<string, QuestionState>(JSON.parse(data.progress.questionStates));
+                        setQuestionStates(savedStates);
+                    } else {
+                        setQuestionStates(states);
+                    }
+                    if (data.progress.score) setScore(data.progress.score);
+                } else {
+                    setQuestionStates(states);
+                    setPhase('notes');
+                }
+                return;
+            } catch (e) {
+                console.error("Cache parse error", e);
+                localStorage.removeItem(cacheKey);
+            }
+        }
+
         setPhase('loading');
         try {
             const data = await api.generateRevision(userId, curriculumId, milestone);
@@ -65,11 +139,36 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
             });
             setQuestionStates(states);
 
+            localStorage.setItem(cacheKey, JSON.stringify({
+                notes: data.notes,
+                questions: data.questions,
+                timestamp: Date.now()
+            }));
+
             setPhase('notes');
         } catch (error) {
             console.error('Failed to load revision:', error);
         }
     }, [userId, curriculumId, milestone]);
+
+    useEffect(() => {
+        if (notes.length === 0 && questions.length === 0) return;
+
+        const cacheKey = `revision_${userId}_${curriculumId}_${milestone}`;
+        const currentCache = localStorage.getItem(cacheKey);
+
+        if (currentCache) {
+            const data = JSON.parse(currentCache);
+            data.progress = {
+                phase,
+                noteIndex: currentNoteIndex,
+                questionIndex: currentQuestionIndex,
+                score,
+                questionStates: JSON.stringify(Array.from(questionStates.entries()))
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+        }
+    }, [phase, currentNoteIndex, currentQuestionIndex, score, questionStates, userId, curriculumId, milestone, notes.length, questions.length]);
 
     useEffect(() => {
         if (isOpen) {
@@ -150,14 +249,20 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
     };
 
     const handleClose = () => {
-        api.submitRevisionResults({
-            userId,
-            curriculumId,
-            milestone,
-            score: questions.length > 0 ? (score.correct / questions.length) * 100 : 0,
-            totalQuestions: questions.length,
-            correctAnswers: score.correct
-        });
+        if (phase === 'results') {
+            api.submitRevisionResults({
+                userId,
+                curriculumId,
+                milestone,
+                score: questions.length > 0 ? (score.correct / questions.length) * 100 : 0,
+                totalQuestions: questions.length,
+                correctAnswers: score.correct
+            });
+
+            // Clear cache on successful completion
+            const cacheKey = `revision_${userId}_${curriculumId}_${milestone}`;
+            localStorage.removeItem(cacheKey);
+        }
         onClose();
     };
 
@@ -253,11 +358,21 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                                 </div>
 
                                 {notes[currentNoteIndex].formulas && notes[currentNoteIndex].formulas!.length > 0 && (
-                                    <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
-                                        <h4 className="font-medium text-foreground mb-2">Formulas</h4>
-                                        <div className="space-y-1 font-mono text-sm text-primary">
+                                    <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-xl p-5 border border-indigo-500/20 shadow-sm">
+                                        <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2 text-base">
+                                            <Calculator className="w-4 h-4 text-indigo-500" />
+                                            Key Formulas
+                                        </h4>
+                                        <div className="space-y-3">
                                             {notes[currentNoteIndex].formulas!.map((f, i) => (
-                                                <div key={i}>{f}</div>
+                                                <div
+                                                    key={i}
+                                                    className="bg-background/60 backdrop-blur-sm rounded-lg p-3.5 border border-indigo-500/10 hover:border-indigo-500/30 transition-colors"
+                                                >
+                                                    <p className="font-serif text-base text-indigo-950 dark:text-indigo-100 block leading-relaxed break-words whitespace-pre-wrap">
+                                                        {formatFormula(f)}
+                                                    </p>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
@@ -285,8 +400,8 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                             >
                                 <div className="flex items-center justify-between">
                                     <span className={`px-2 py-1 rounded text-xs font-medium ${currentQuestion.difficulty === 'easy' ? 'bg-green-500/20 text-green-400' :
-                                            currentQuestion.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                'bg-red-500/20 text-red-400'
+                                        currentQuestion.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                            'bg-red-500/20 text-red-400'
                                         }`}>
                                         {currentQuestion.difficulty}
                                     </span>
@@ -310,14 +425,14 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                                                     onClick={() => handleMCQAnswer(currentQuestion.id, i)}
                                                     disabled={showResult}
                                                     className={`w-full p-4 rounded-xl text-left transition-all border ${showResult
-                                                            ? isCorrect
-                                                                ? 'bg-green-500/20 border-green-500/50 text-green-400'
-                                                                : isSelected
-                                                                    ? 'bg-red-500/20 border-red-500/50 text-red-400'
-                                                                    : 'bg-muted/30 border-border text-muted-foreground'
+                                                        ? isCorrect
+                                                            ? 'bg-green-500/20 border-green-500/50 text-green-400'
                                                             : isSelected
-                                                                ? 'bg-primary/20 border-primary/50 text-foreground'
-                                                                : 'bg-muted/30 border-border hover:border-primary/30 text-foreground'
+                                                                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                                                                : 'bg-muted/30 border-border text-muted-foreground'
+                                                        : isSelected
+                                                            ? 'bg-primary/20 border-primary/50 text-foreground'
+                                                            : 'bg-muted/30 border-border hover:border-primary/30 text-foreground'
                                                         }`}
                                                 >
                                                     <div className="flex items-center justify-between">
@@ -369,7 +484,9 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                                         className="bg-muted/30 rounded-xl p-4 border border-border"
                                     >
                                         <h4 className="font-medium text-foreground mb-2">Explanation</h4>
-                                        <p className="text-sm text-muted-foreground">{currentQuestion.explanation}</p>
+                                        <div className="text-base text-foreground/90 leading-relaxed space-y-2">
+                                            {renderFormattedText(currentQuestion.explanation)}
+                                        </div>
                                     </motion.div>
                                 )}
 
