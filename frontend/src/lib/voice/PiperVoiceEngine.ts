@@ -14,29 +14,19 @@ export class PiperVoiceEngine {
     private isSpeaking = false;
     private isListening = false;
     private isInitializing = false;
-    private shouldBeListening = false; // Intention tracker
+    private shouldBeListening = false;
     private speechQueue: { text: string; delay: number }[] = [];
     private currentAudio: HTMLAudioElement | null = null;
     private recognition: any = null;
     private audioCache: Map<string, AudioCacheEntry> = new Map();
     private maxCacheSize = 100;
+    private resultReceived = false;
 
+    // We preload these to make interactions snappy
     private commonPhrases: string[] = [
-        'Visual impairment mode on. Say help for available commands.',
-        'Visual impairment mode off.',
-        'Listening',
-        'Command not recognized. Say help for available commands.',
-        'Going to next section',
-        'Going to previous section',
-        'Going to next lesson',
-        'Going to previous lesson',
-        'Speech speed increased',
-        'Speech speed decreased',
-        'Here are the available commands.',
-        'Correct! Great job.',
-        'Incorrect. Try again.',
-        'Submitting answer',
-        'Yes', 'No', 'Next', 'Back', 'Stop', 'Help', 'Repeat'
+        'Visual impairment mode on', 'Visual impairment mode off',
+        'Listening', 'Yes', 'No', 'Next', 'Back', 'Stop', 'Help', 'Repeat',
+        'Correct', 'Incorrect', 'Option A', 'Option B', 'Option C', 'Option D'
     ];
 
     constructor(config: VoiceEngineConfig = {}) {
@@ -44,7 +34,6 @@ export class PiperVoiceEngine {
         this.preferences = validatePreferences(loadVoicePreferences());
     }
 
-    // Call this explicitly if you want to preload, e.g. on idle or boot
     public async preloadCommonPhrases(): Promise<void> {
         this.commonPhrases.forEach(text => this.fetchAudio(text).catch(() => { }));
     }
@@ -54,9 +43,7 @@ export class PiperVoiceEngine {
         if (this.isInitializing) return false;
 
         this.isInitializing = true;
-
-        const SpeechRecognitionAPI = (window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition;
+        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
         if (!SpeechRecognitionAPI) {
             console.error('Speech Recognition not supported');
@@ -68,8 +55,8 @@ export class PiperVoiceEngine {
             await navigator.mediaDevices.getUserMedia({ audio: true });
 
             this.recognition = new SpeechRecognitionAPI();
-            this.recognition.continuous = false; // PTT usually works best with false
-            this.recognition.interimResults = true; // Enable interim to catch fast speech
+            this.recognition.continuous = false;
+            this.recognition.interimResults = true;
             this.recognition.lang = this.preferences.language || 'en-US';
             this.recognition.maxAlternatives = 1;
             this.setupRecognitionHandlers();
@@ -78,9 +65,7 @@ export class PiperVoiceEngine {
             return true;
         } catch (error) {
             console.error('Microphone init failed:', error);
-            if (this.config.onError) {
-                this.config.onError(new Error('Microphone permission denied.'));
-            }
+            if (this.config.onError) this.config.onError(new Error('Microphone blocked.'));
             this.isInitializing = false;
             return false;
         }
@@ -91,23 +76,20 @@ export class PiperVoiceEngine {
 
         this.recognition.onstart = () => {
             this.isListening = true;
-            if (this.config.onListeningChange) {
-                this.config.onListeningChange(true);
-            }
-            // Check if we should have stopped while initializing
-            if (!this.shouldBeListening) {
-                this.stopListening();
-            }
+            this.resultReceived = false;
+            if (this.config.onListeningChange) this.config.onListeningChange(true);
+
+            if (!this.shouldBeListening) this.stopListening();
         };
 
         this.recognition.onresult = (event: any) => {
             const results = event.results[event.resultIndex];
             const transcript = results[0].transcript.trim();
             const confidence = results[0].confidence;
-            const isFinal = results.isFinal;
 
-            if (isFinal) {
-                if (transcript && this.config.onRecognitionResult) {
+            if (results.isFinal && transcript) {
+                this.resultReceived = true;
+                if (this.config.onRecognitionResult) {
                     this.config.onRecognitionResult(transcript, confidence);
                 }
             }
@@ -115,7 +97,7 @@ export class PiperVoiceEngine {
 
         this.recognition.onerror = (event: any) => {
             if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
-                // Ignore transient errors
+                // Ignore
             } else {
                 console.warn('Recognition error:', event.error);
             }
@@ -124,18 +106,19 @@ export class PiperVoiceEngine {
         this.recognition.onend = () => {
             this.isListening = false;
 
+            // If user is still holding key, restart (network drop case)
             if (this.shouldBeListening) {
-                // Restart immediately if intention is to keep listening
                 setTimeout(() => {
                     if (this.shouldBeListening && !this.isListening) {
-                        try {
-                            this.recognition.start();
-                        } catch (e) { }
+                        try { this.recognition.start(); } catch (e) { }
                     }
-                }, 100);
+                }, 50);
             } else {
-                if (this.config.onListeningChange) {
-                    this.config.onListeningChange(false);
+                if (this.config.onListeningChange) this.config.onListeningChange(false);
+
+                // If we stopped naturally and got NO result (silence), notify config
+                if (!this.resultReceived && this.config.onNoSpeechDetected) {
+                    this.config.onNoSpeechDetected();
                 }
             }
         };
@@ -143,6 +126,7 @@ export class PiperVoiceEngine {
 
     public async startListening(): Promise<void> {
         this.shouldBeListening = true;
+        this.resultReceived = false;
 
         if (!this.recognition) {
             const success = await this.initializeRecognition();
@@ -150,7 +134,6 @@ export class PiperVoiceEngine {
                 this.shouldBeListening = false;
                 return;
             }
-            // Start preloading after mic is granted (optional optimization)
             this.preloadCommonPhrases();
         }
 
@@ -160,21 +143,17 @@ export class PiperVoiceEngine {
         try {
             this.recognition.start();
         } catch (error) {
-            console.log('Start ignored:', error);
+            // Already started or busy
         }
     }
 
     public stopListening(): void {
         this.shouldBeListening = false;
-
         if (!this.recognition) return;
-
-        try {
-            this.recognition.stop();
-        } catch (error) {
-            console.log('Stop ignored:', error);
-        }
+        try { this.recognition.stop(); } catch (error) { }
     }
+
+    // --- Audio & Caching ---
 
     private getCacheKey(text: string): string {
         return `${text}:${this.preferences.rate}:${this.preferences.pitch}`;
@@ -192,7 +171,6 @@ export class PiperVoiceEngine {
 
     private async fetchAudio(text: string): Promise<string | null> {
         if (!text) return null;
-
         const cacheKey = this.getCacheKey(text);
         if (this.audioCache.has(cacheKey)) {
             const entry = this.audioCache.get(cacheKey)!;
@@ -215,7 +193,6 @@ export class PiperVoiceEngine {
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
-
             this.audioCache.set(cacheKey, { url, timestamp: Date.now() });
             this.cleanCache();
             return url;

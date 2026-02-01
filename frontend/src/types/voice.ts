@@ -44,5 +44,6 @@ export interface VoiceEngineConfig {
     onSpeechStart?: () => void;
     onRecognitionResult?: (transcript: string, confidence: number) => void;
     onListeningChange?: (isListening: boolean) => void;
+    onNoSpeechDetected?: () => void; // Fired when PTT ends without result
     onAnalyticsEvent?: (event: VoiceAnalyticsEvent) => void;
 }

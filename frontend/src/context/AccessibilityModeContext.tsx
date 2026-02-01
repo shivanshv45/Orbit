@@ -59,12 +59,21 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
     const [isListening, setIsListening] = useState(false);
     const voiceEngineRef = useRef<PiperVoiceEngine | null>(null);
     const teachingHandlerRef = useRef<((transcript: string) => boolean) | null>(null);
+    const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const prefs = loadVoicePreferences();
         if (prefs.visualImpairmentMode === true) {
             setIsAccessibilityModeOn(true);
         }
+    }, []);
+
+    const resumeWithDelay = useCallback(() => {
+        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+
+        resumeTimeoutRef.current = setTimeout(() => {
+            voiceEngineRef.current?.resume();
+        }, 800); // 800ms delay for natural pause
     }, []);
 
     useEffect(() => {
@@ -75,6 +84,10 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
                 onListeningChange: (listening) => setIsListening(listening),
                 onRecognitionResult: (transcript, confidence) => {
                     handleVoiceCommand(transcript, confidence);
+                },
+                onNoSpeechDetected: () => {
+                    // Resume if no speech was detected after PTT release
+                    resumeWithDelay();
                 },
                 onError: (error) => {
                     console.error('Voice engine error:', error);
@@ -98,6 +111,7 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
                 voiceEngineRef.current.destroy();
                 voiceEngineRef.current = null;
             }
+            if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         };
     }, [isAccessibilityModeOn]);
 
@@ -119,7 +133,7 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
         }
 
         if (normalized.includes('help') || normalized.includes('commands')) {
-            voiceEngineRef.current?.speak('Available commands: Say next to continue, repeat to hear again, previous to go back, faster or slower to change speed, or go to curriculum to exit lesson.');
+            voiceEngineRef.current?.speak('Available commands: Next, Repeat, Faster, Slower, Go to curriculum.');
             return;
         }
 
@@ -129,15 +143,15 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
             return;
         }
 
-        if (normalized.includes('go to curriculum') || normalized.includes('curriculum') || normalized.includes('exit lesson')) {
+        if (normalized.includes('go to curriculum') || normalized.includes('exit lesson')) {
             voiceEngineRef.current?.speak('Going to curriculum');
             setTimeout(() => { window.location.href = '/curriculum'; }, 1500);
             return;
         }
 
-
-        voiceEngineRef.current?.resume();
-    }, []);
+        // If no matches, just resume previous speech after delay
+        resumeWithDelay();
+    }, [resumeWithDelay]);
 
     const toggleAccessibilityMode = useCallback(() => {
         setIsAccessibilityModeOn(prev => {
@@ -148,12 +162,14 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
     }, []);
 
     const speak = useCallback((text: string, interrupt: boolean = false) => {
+        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         if (voiceEngineRef.current && isAccessibilityModeOn) {
             voiceEngineRef.current.speak(text, interrupt);
         }
     }, [isAccessibilityModeOn]);
 
     const speakMultiple = useCallback((texts: string[]) => {
+        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         if (voiceEngineRef.current && isAccessibilityModeOn) {
             texts.forEach((text, index) => {
                 voiceEngineRef.current?.speak(text, index === 0);
@@ -166,6 +182,7 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
     }, []);
 
     const startListening = useCallback(() => {
+        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         if (voiceEngineRef.current && isAccessibilityModeOn) {
             voiceEngineRef.current.pause();
             voiceEngineRef.current.startListening();
@@ -175,10 +192,8 @@ export function AccessibilityModeProvider({ children }: AccessibilityModeProvide
     const stopListening = useCallback(() => {
         if (voiceEngineRef.current) {
             voiceEngineRef.current.stopListening();
-            // Optimistically resume. If a command was properly recognized, it will fire handleVoiceCommand 
-            // which handles its own speak calls (overriding this resume) or calls resume itself.
-            // This ensures we resume if the user just clicked Ctrl without speaking or if silence.
-            voiceEngineRef.current.resume();
+            // Do NOT automatically resume here. 
+            // We rely on onRecognitionResult or onNoSpeechDetected to trigger action or resume.
         }
     }, []);
 
