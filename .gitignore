@@ -110,5 +110,6 @@ whats_done.md
 backend/piper/
 backend/piper_models/
 backend/piper/espeak-ng-data/
+backend/tts_cache/
 *.onnx
 *.onnx.json
