@@ -25,9 +25,7 @@ export class VoiceTeachingStateMachine {
     }
 
     public processCommand(command: VoiceCommand): boolean {
-        const { type, action, parameters } = command;
-
-        console.log('[StateMachine] Processing command:', { type, action, parameters, currentState: this.currentState });
+        const { action, parameters } = command;
 
         switch (this.currentState) {
             case 'IDLE':
@@ -115,6 +113,15 @@ export class VoiceTeachingStateMachine {
 
             case 'open_settings':
                 this.triggerAction('open_settings');
+                return true;
+
+            case 'camera_on':
+            case 'camera_off':
+                this.triggerAction('toggle_camera');
+                return true;
+
+            case 'ask_ai':
+                this.triggerAction('ask_ai');
                 return true;
 
             default:
@@ -205,27 +212,27 @@ export class VoiceTeachingStateMachine {
 
         switch (state) {
             case 'IDLE':
-                prompt = 'Voice mode ready. Say "start" to begin the lesson.';
+                prompt = 'Voice mode ready. Say start to begin the lesson.';
                 break;
 
             case 'TEACHING':
-                prompt = 'Continuing lesson. Say "next" to continue or "pause" to stop.';
+                prompt = 'Continuing lesson. Say next to continue or pause to stop.';
                 break;
 
             case 'QUESTION':
-                prompt = 'Please answer the question. Say "repeat" to hear it again.';
+                prompt = 'Please answer the question. Say repeat to hear it again.';
                 break;
 
             case 'PAUSED':
-                prompt = 'Lesson paused. Say "resume" to continue.';
+                prompt = 'Lesson paused. Say resume to continue.';
                 break;
 
             case 'COMPLETED':
-                prompt = 'Lesson completed! Say "next" for the next lesson.';
+                prompt = 'Lesson completed! Say next for the next lesson.';
                 break;
 
             case 'ERROR':
-                prompt = 'An error occurred. Say "start" to restart or "help" for assistance.';
+                prompt = 'An error occurred. Say start to restart or help for assistance.';
                 break;
         }
 
@@ -246,7 +253,7 @@ export class VoiceTeachingStateMachine {
                 return ['start', 'help'];
 
             case 'TEACHING':
-                return ['next', 'repeat', 'pause', 'back', 'help', 'speed_up', 'slow_down'];
+                return ['next', 'repeat', 'pause', 'back', 'help', 'speed_up', 'slow_down', 'camera_on', 'camera_off', 'ask_ai'];
 
             case 'QUESTION':
                 return ['answer', 'repeat', 'help'];

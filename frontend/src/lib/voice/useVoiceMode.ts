@@ -1,8 +1,7 @@
-
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { TeachingBlock } from '@/types/teaching';
 import type { VerbosityLevel } from '@/types/voice';
-import { VoiceEngine } from './VoiceEngine';
+import { PiperVoiceEngine } from './PiperVoiceEngine';
 import { VoiceCommandRouter } from './VoiceCommandRouter';
 import { VoiceContentConverter } from './VoiceContentConverter';
 import { VoiceAnalytics } from './VoiceAnalytics';
@@ -32,11 +31,13 @@ export function useVoiceMode({
     onPreviousLesson,
 }: UseVoiceModeProps) {
     const [isListening, setIsListening] = useState(false);
-    const voiceEngineRef = useRef<VoiceEngine | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const voiceEngineRef = useRef<PiperVoiceEngine | null>(null);
     const commandRouterRef = useRef(new VoiceCommandRouter());
     const contentConverterRef = useRef(new VoiceContentConverter('normal' as VerbosityLevel));
     const analyticsRef = useRef<VoiceAnalytics | null>(null);
     const { uid } = createOrGetUser();
+    const lastSpokenBlockRef = useRef<number>(-1);
 
     useEffect(() => {
         if (!enabled) {
@@ -45,12 +46,21 @@ export function useVoiceMode({
             analyticsRef.current?.endSession();
             analyticsRef.current = null;
             setIsListening(false);
+            setIsSpeaking(false);
             return;
         }
 
         if (!voiceEngineRef.current) {
-            voiceEngineRef.current = new VoiceEngine({
+            voiceEngineRef.current = new PiperVoiceEngine({
                 onRecognitionResult: (transcript, confidence) => handleVoiceCommand(transcript, confidence),
+                onSpeechStart: () => setIsSpeaking(true),
+                onSpeechEnd: () => {
+                    setIsSpeaking(false);
+                    if (voiceEngineRef.current) {
+                        voiceEngineRef.current.startListening();
+                        setIsListening(true);
+                    }
+                },
                 onError: () => {
                     setIsListening(false);
                 },
@@ -66,18 +76,41 @@ export function useVoiceMode({
             voiceEngineRef.current?.destroy();
             analyticsRef.current?.endSession();
             setIsListening(false);
+            setIsSpeaking(false);
         };
     }, [enabled, uid, subtopicId]);
 
     useEffect(() => {
-        if (!enabled || currentBlockIndex < 0) return;
+        if (!enabled || currentBlockIndex < 0 || !voiceEngineRef.current) return;
+        if (lastSpokenBlockRef.current === currentBlockIndex) return;
+
+        lastSpokenBlockRef.current = currentBlockIndex;
 
         const timer = setTimeout(() => {
             speakCurrentBlock();
+            prefetchNextBlocks();
         }, 300);
 
         return () => clearTimeout(timer);
     }, [enabled, currentBlockIndex]);
+
+    const prefetchNextBlocks = useCallback(() => {
+        if (!voiceEngineRef.current || !enabled) return;
+
+        const textsToPreFetch: string[] = [];
+
+        for (let i = currentBlockIndex + 1; i <= currentBlockIndex + 3 && i < blocks.length; i++) {
+            const block = blocks[i];
+            if (block) {
+                const scripts = contentConverterRef.current.convertBlock(block, i, blocks.length);
+                scripts.forEach(script => textsToPreFetch.push(script.text));
+            }
+        }
+
+        if (textsToPreFetch.length > 0) {
+            voiceEngineRef.current.prefetch(textsToPreFetch);
+        }
+    }, [enabled, blocks, currentBlockIndex]);
 
     const speakCurrentBlock = useCallback(() => {
         if (!enabled || !voiceEngineRef.current) return;
@@ -105,7 +138,7 @@ export function useVoiceMode({
         const command = commandRouterRef.current.route(transcript, context);
 
         if (!command) {
-            voiceEngineRef.current?.speak("I didn't understand that. Say 'help' for available commands.");
+            voiceEngineRef.current?.speak("I didn't understand that. Say help for available commands.");
             if (analyticsRef.current) {
                 analyticsRef.current.trackEvent({
                     type: 'misrecognition',
@@ -129,6 +162,7 @@ export function useVoiceMode({
                 onNext();
                 break;
             case 'repeat':
+                lastSpokenBlockRef.current = -1;
                 onRepeat();
                 break;
             case 'back':
@@ -153,10 +187,6 @@ export function useVoiceMode({
             case 'help':
                 const helpText = commandRouterRef.current.getHelpText('TEACHING');
                 voiceEngineRef.current?.speak(helpText);
-                break;
-            case 'open_settings':
-            case 'close_settings':
-                voiceEngineRef.current?.speak('Settings panel - use the gear icon');
                 break;
             case 'current_position':
                 const positionText = `You are on section ${currentBlockIndex + 1} of ${blocks.length}`;
@@ -189,7 +219,7 @@ export function useVoiceMode({
                 voiceEngineRef.current?.speak('Returning to curriculum');
                 setTimeout(() => {
                     window.location.href = '/curriculum';
-                }, 500);
+                }, 1500);
                 break;
             case 'select_option':
                 if (command.parameters?.option) {
@@ -203,7 +233,7 @@ export function useVoiceMode({
                         } else {
                             voiceEngineRef.current?.speak(`Could not find option ${option}`);
                         }
-                    }, 100);
+                    }, 500);
                 }
                 break;
             case 'submit_answer':
@@ -215,7 +245,7 @@ export function useVoiceMode({
                     } else {
                         voiceEngineRef.current?.speak('Submit button not found');
                     }
-                }, 100);
+                }, 500);
                 break;
             case 'fill_in':
                 if (command.parameters?.answer) {
@@ -225,6 +255,21 @@ export function useVoiceMode({
             case 'start':
                 voiceEngineRef.current?.speak('Starting lesson');
                 speakCurrentBlock();
+                break;
+            case 'camera_on':
+            case 'camera_off':
+                const cameraBtn = document.querySelector('[data-camera-toggle]');
+                if (cameraBtn) {
+                    (cameraBtn as HTMLButtonElement).click();
+                    voiceEngineRef.current?.speak('Camera toggled');
+                }
+                break;
+            case 'ask_ai':
+                const askAIBtn = document.querySelector('[data-ask-ai]');
+                if (askAIBtn) {
+                    (askAIBtn as HTMLButtonElement).click();
+                    voiceEngineRef.current?.speak('Opening Ask AI');
+                }
                 break;
             default:
                 voiceEngineRef.current?.speak("Command recognized but not yet implemented.");
@@ -259,6 +304,7 @@ export function useVoiceMode({
 
     return {
         isListening,
+        isSpeaking,
         startListening,
         stopListening,
         speakText,

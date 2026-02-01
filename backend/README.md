@@ -33,3 +33,10 @@
 ### API Design
 - **Stateless Session Handling**: Pure REST architecture; Session identity resolved via `X-User-Id` headers (supporting both Auth/Guest UUIDs uniformly).
 - **Async I/O**: Fully asynchronous route handlers for non-blocking database and external API operations.
+
+## 🚀 Deployment
+
+### Piper TTS Hosting
+> **Critical Deployment Note:**
+> To host this application on a free tier (Render, Railway, etc.), you must **replace the Windows Piper binary (`piper.exe`) with the Linux version**.
+> The current `.env` points to the local Windows executable. Ensure your production environment uses the compatible Linux binary for voice synthesis to work.

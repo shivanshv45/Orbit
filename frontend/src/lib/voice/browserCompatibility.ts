@@ -1,4 +1,3 @@
-
 export interface BrowserCompatibility {
     ttsSupported: boolean;
     sttSupported: boolean;
@@ -19,11 +18,6 @@ function detectBrowser(): string {
     return 'Unknown';
 }
 
-
-function checkTTSSupport(): boolean {
-    return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-}
-
 function checkSTTSupport(): boolean {
     return (
         'SpeechRecognition' in window ||
@@ -33,23 +27,18 @@ function checkSTTSupport(): boolean {
 
 export function getBrowserCompatibility(): BrowserCompatibility {
     const browserName = detectBrowser();
-    const ttsSupported = checkTTSSupport();
+    const ttsSupported = true;
     const sttSupported = checkSTTSupport();
 
-    const isFullySupported = ttsSupported && sttSupported;
+    const isFullySupported = sttSupported;
 
     let warningMessage: string | null = null;
 
-    if (!ttsSupported && !sttSupported) {
+    if (!sttSupported) {
         warningMessage =
-            'Voice learning is not supported in this browser. Please use Chrome or Edge for the best experience.';
-    } else if (ttsSupported && !sttSupported) {
-        warningMessage =
-            'Voice learning works best in Chrome or Edge. Voice commands may not work fully in this browser. ' +
-            'Speech output will work, but you may need to use keyboard or mouse for some actions.';
-    } else if (!ttsSupported && sttSupported) {
-        warningMessage =
-            'Speech output is not supported in this browser. Please use Chrome or Edge for the full voice learning experience.';
+            'Voice commands may not work fully in this browser. ' +
+            'Speech output will work, but you may need to use keyboard or mouse for some actions. ' +
+            'For the best experience, use Chrome or Edge.';
     }
 
     return {
@@ -66,13 +55,9 @@ export function getSpokenWarning(compatibility: BrowserCompatibility): string | 
         return null;
     }
 
-    if (!compatibility.ttsSupported) {
-        return 'Voice learning is not supported in this browser. Please switch to Chrome or Edge.';
-    }
-
     if (!compatibility.sttSupported) {
-        return 'Voice learning works best in Chrome or Edge. Voice commands may not work fully in this browser. ' +
-            'Say continue to proceed, or say cancel to exit voice mode.';
+        return 'Voice commands may not work fully in this browser. ' +
+            'Say continue to proceed, or use keyboard navigation.';
     }
 
     return null;
