@@ -1,4 +1,3 @@
-
 import type { VoiceProgress } from '@/types/voice';
 
 const STORAGE_KEY_PREFIX = 'orbit_voice_progress_';
@@ -22,8 +21,7 @@ export function loadVoiceProgress(subtopicId: string): VoiceProgress | null {
         }
 
         return progress;
-    } catch (error) {
-        console.error('Failed to load voice progress:', error);
+    } catch {
         return null;
     }
 }
@@ -37,8 +35,7 @@ export function saveVoiceProgress(progress: VoiceProgress): void {
         };
 
         localStorage.setItem(key, JSON.stringify(updated));
-    } catch (error) {
-        console.error('Failed to save voice progress:', error);
+    } catch {
     }
 }
 
@@ -65,8 +62,7 @@ export function clearVoiceProgress(subtopicId: string): void {
     try {
         const key = STORAGE_KEY_PREFIX + subtopicId;
         localStorage.removeItem(key);
-    } catch (error) {
-        console.error('Failed to clear voice progress:', error);
+    } catch {
     }
 }
 

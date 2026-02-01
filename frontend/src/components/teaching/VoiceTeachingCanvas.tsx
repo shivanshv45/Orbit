@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Play, Settings as SettingsIcon } from 'lucide-react';
 import type { TeachingBlock } from '@/types/teaching';
 import type { VoiceState, VoicePreferences, VerbosityLevel, VoiceProgress } from '@/types/voice';
-import { VoiceEngine } from '@/lib/voice/VoiceEngine';
+import { PiperVoiceEngine } from '@/lib/voice/PiperVoiceEngine';
 import { VoiceTeachingStateMachine } from '@/lib/voice/VoiceTeachingStateMachine';
 import { VoiceCommandRouter } from '@/lib/voice/VoiceCommandRouter';
 import { VoiceContentConverter } from '@/lib/voice/VoiceContentConverter';
@@ -42,7 +42,7 @@ export function VoiceTeachingCanvas({
     const [verbosity, setVerbosity] = useState<VerbosityLevel>('normal');
     const [showResumePrompt, setShowResumePrompt] = useState(false);
 
-    const voiceEngineRef = useRef<VoiceEngine | null>(null);
+    const voiceEngineRef = useRef<PiperVoiceEngine | null>(null);
     const stateMachineRef = useRef<VoiceTeachingStateMachine | null>(null);
     const commandRouterRef = useRef<VoiceCommandRouter>(new VoiceCommandRouter());
     const contentConverterRef = useRef<VoiceContentConverter>(new VoiceContentConverter());
@@ -52,12 +52,11 @@ export function VoiceTeachingCanvas({
 
     // Initialize voice engine and state machine
     useEffect(() => {
-        voiceEngineRef.current = new VoiceEngine({
+        voiceEngineRef.current = new PiperVoiceEngine({
+            onSpeechStart: () => {
+                setIsListening(false);
+            },
             onSpeechEnd: () => {
-                // After speaking completes, ready to listen if in teaching/question state
-                if (currentState === 'TEACHING' || currentState === 'QUESTION') {
-                    startListeningWithDelay();
-                }
             },
             onRecognitionResult: (transcript, confidence) => {
                 setLastTranscript(transcript);
@@ -94,25 +93,41 @@ export function VoiceTeachingCanvas({
         };
     }, [subtopicId, uid]);
 
-    // Enable continuous listening mode when accessibility mode is on
     useEffect(() => {
-        if (voiceEngineRef.current) {
-            voiceEngineRef.current.setContinuousMode(isAccessibilityModeOn);
+        if (!voiceEngineRef.current) return;
 
-            if (isAccessibilityModeOn) {
-                setIsListening(true);
-                // Auto-start listening immediately
-                voiceEngineRef.current.startListening();
+        if (isAccessibilityModeOn && currentState === 'IDLE') {
+            const timer = setTimeout(() => {
+                startLesson();
+            }, 500);
+            return () => clearTimeout(timer);
+        }
 
-                // If we're in IDLE state, give lesson-specific instructions (delay to avoid overlap with toggle announcement)
-                if (currentState === 'IDLE' && !showResumePrompt) {
-                    setTimeout(() => {
-                        voiceEngineRef.current?.speak('Say "start" to begin the lesson, or "help" for available commands.');
-                    }, 2000);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Control' && isAccessibilityModeOn) {
+                e.stopPropagation();
+                if (!isListening) {
+                    voiceEngineRef.current?.startListening();
+                    setIsListening(true);
                 }
             }
-        }
-    }, [isAccessibilityModeOn, currentState, showResumePrompt]);
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === 'Control' && isAccessibilityModeOn) {
+                e.stopPropagation();
+                voiceEngineRef.current?.stopListening();
+                setIsListening(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown, { capture: true });
+        window.addEventListener('keyup', handleKeyUp, { capture: true });
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown, { capture: true });
+            window.removeEventListener('keyup', handleKeyUp, { capture: true });
+        };
+    }, [isAccessibilityModeOn, currentState]);
 
     // Save progress whenever key state changes
     const saveProgress = useCallback(() => {
@@ -162,31 +177,20 @@ export function VoiceTeachingCanvas({
         const block = blocks[currentBlockIndex];
         const scripts = contentConverterRef.current.convertBlock(block, currentBlockIndex, blocks.length);
 
-        // Speak each script sequentially
-        scripts.forEach((script, index) => {
-            setTimeout(() => {
-                voiceEngineRef.current?.speak(script.text);
-                if (script.pauseAfter && index < scripts.length - 1) {
-                    setTimeout(() => { }, script.pauseAfter);
-                }
-            }, index * 100);
+        // Speak each script sequentially with proper delays
+        scripts.forEach((script) => {
+            voiceEngineRef.current?.speak(script.text, false, script.pauseAfter || 0);
         });
 
         // If it's a question, transition to QUESTION state
         if (block.type === 'question') {
-            setTimeout(() => {
-                stateMachineRef.current?.transitionTo('QUESTION');
-            }, scripts.length * 200);
+            // Transition state to enable answer recognition
+            stateMachineRef.current?.transitionTo('QUESTION');
         }
     }, [blocks, currentBlockIndex]);
 
-    // Start listening with a small delay
-    const startListeningWithDelay = () => {
-        setTimeout(() => {
-            voiceEngineRef.current?.startListening();
-            setIsListening(true);
-        }, 500);
-    };
+
+
 
     // Handle voice commands
     const handleVoiceCommand = (transcript: string, confidence: number) => {
@@ -343,7 +347,7 @@ export function VoiceTeachingCanvas({
 
         const feedbackScripts = contentConverterRef.current.convertFeedback(isCorrect, explanation);
         feedbackScripts.forEach(script => {
-            voiceEngineRef.current?.speak(script.text);
+            voiceEngineRef.current?.speak(script.text, false, script.pauseAfter || 0);
         });
 
         // Move to next block after feedback

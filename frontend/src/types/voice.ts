@@ -1,7 +1,3 @@
-/**
- * Voice Learning System Type Definitions
- */
-
 export type VoiceState = 'IDLE' | 'TEACHING' | 'QUESTION' | 'PAUSED' | 'COMPLETED' | 'ERROR';
 
 export type VerbosityLevel = 'short' | 'normal' | 'detailed';
@@ -47,5 +43,7 @@ export interface VoiceEngineConfig {
     onSpeechEnd?: () => void;
     onSpeechStart?: () => void;
     onRecognitionResult?: (transcript: string, confidence: number) => void;
+    onListeningChange?: (isListening: boolean) => void;
+    onNoSpeechDetected?: () => void; // Fired when PTT ends without result
     onAnalyticsEvent?: (event: VoiceAnalyticsEvent) => void;
 }

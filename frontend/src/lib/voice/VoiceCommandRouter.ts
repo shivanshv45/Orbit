@@ -12,9 +12,7 @@ function fuzzyMatch(utterance: string, patterns: string[]): boolean {
         const normalizedPattern = pattern.toLowerCase();
 
         if (normalizedUtterance === normalizedPattern) return true;
-
         if (normalizedUtterance.includes(normalizedPattern)) return true;
-
         if (normalizedUtterance.startsWith(normalizedPattern)) return true;
 
         const words = normalizedUtterance.split(/\s+/);
@@ -103,8 +101,16 @@ const ACCESSIBILITY_COMMANDS: CommandPattern[] = [
         command: { type: 'accessibility', action: 'verbosity_normal' },
     },
     {
-        patterns: ['settings', 'open settings', 'voice settings', 'preferences'],
-        command: { type: 'accessibility', action: 'open_settings' },
+        patterns: ['camera on', 'enable camera', 'turn on camera', 'start camera'],
+        command: { type: 'accessibility', action: 'camera_on' },
+    },
+    {
+        patterns: ['camera off', 'disable camera', 'turn off camera', 'stop camera'],
+        command: { type: 'accessibility', action: 'camera_off' },
+    },
+    {
+        patterns: ['ask doubt', 'ask question', 'ask ai', 'i have a doubt', 'i have a question'],
+        command: { type: 'accessibility', action: 'ask_ai' },
     },
 ];
 
@@ -149,7 +155,6 @@ export class VoiceCommandRouter {
         context: { state: string; questionType?: 'mcq' | 'fill_in_blank' }
     ): VoiceCommand | null {
 
-
         if (!utterance || utterance.trim().length === 0) {
             return null;
         }
@@ -187,27 +192,29 @@ export class VoiceCommandRouter {
 
     public getHelpText(state: string): string {
         const baseCommands = [
-            'Say "next" to continue',
-            'Say "repeat" to hear again',
-            'Say "pause" to pause',
-            'Say "faster" or "slower" to adjust speed',
+            'Say next to continue',
+            'Say repeat to hear again',
+            'Say pause to pause',
+            'Say faster or slower to adjust speed',
+            'Say ask doubt to ask AI about the topic',
+            'Say camera on or camera off to toggle camera',
         ];
 
         if (state === 'QUESTION') {
-            return 'You can answer by saying "option A", "option B", and so on. ' +
-                'You can also say "repeat" to hear the question again, or "help" for more options.';
+            return 'You can answer by saying option A, option B, and so on. ' +
+                'You can also say repeat to hear the question again, or help for more options.';
         }
 
         if (state === 'PAUSED') {
-            return 'Say "resume" to continue learning, or say "help" for more options.';
+            return 'Say resume to continue learning, or say help for more options.';
         }
 
         if (state === 'TEACHING') {
-            return 'Available commands: ' + baseCommands.join(', ') +
-                '. Say "help" anytime for assistance.';
+            return 'Available commands: ' + baseCommands.join('. ') +
+                '. Say help anytime for assistance.';
         }
 
-        return 'Say "start" to begin the lesson, or say "help" for available commands.';
+        return 'Say start to begin the lesson, or say help for available commands.';
     }
 
     public getNavigationCommands(): string[] {

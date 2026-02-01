@@ -7,7 +7,7 @@ import { TopicNavigator } from '@/components/layout/TopicNavigator';
 import { ProgressIndicator } from '@/components/layout/ProgressIndicator';
 import { TeachingCanvas } from '@/components/teaching/TeachingCanvas';
 import { VoiceCompatibilityWarning } from '@/components/teaching/VoiceCompatibilityWarning';
-import { VoiceEngine } from '@/lib/voice/VoiceEngine';
+import { PiperVoiceEngine } from '@/lib/voice/PiperVoiceEngine';
 import { loadVoicePreferences } from '@/lib/voice/VoicePreferences';
 import { getBrowserCompatibility } from '@/lib/voice/browserCompatibility';
 import { useCurriculum } from '@/hooks/useCurriculum';
@@ -27,7 +27,7 @@ export default function LearnPage() {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
-  const [tempVoiceEngine, setTempVoiceEngine] = useState<VoiceEngine | null>(null);
+  const [tempVoiceEngine, setTempVoiceEngine] = useState<PiperVoiceEngine | null>(null);
   const { user, isLoaded } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
   // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
@@ -185,7 +185,7 @@ export default function LearnPage() {
       if (!compatibility.isFullySupported && compatibility.warningMessage) {
         // Show warning dialog and create temp voice engine for speaking the warning
         setShowCompatibilityWarning(true);
-        const engine = new VoiceEngine();
+        const engine = new PiperVoiceEngine();
         setTempVoiceEngine(engine);
       } else {
         // Fully supported, enable immediately
@@ -351,7 +351,8 @@ export default function LearnPage() {
                 onPrevious={handlePrevious}
                 hasNext={!!nextSubtopic}
                 hasPrevious={!!previousSubtopic}
-                voiceModeEnabled={voiceModeEnabled}
+                onNextLesson={nextSubtopic ? () => handleSelectSubtopic(nextSubtopic.id) : undefined}
+                onPreviousLesson={previousSubtopic ? () => handleSelectSubtopic(previousSubtopic.id) : undefined}
               />
             </motion.div>
           )}

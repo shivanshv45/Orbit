@@ -1,4 +1,3 @@
-
 export type VerbosityLevel = 'short' | 'normal' | 'detailed';
 export type VoiceGender = 'male' | 'female' | 'neutral';
 
@@ -10,15 +9,15 @@ export interface VoicePreferences {
     voiceName?: string;
     voiceGender?: VoiceGender;
     verbosity: VerbosityLevel;
-    visualImpairmentMode?: boolean; // undefined = not set yet
+    visualImpairmentMode?: boolean;
 }
 
 const STORAGE_KEY = 'orbit_voice_preferences';
 
 export const DEFAULT_PREFERENCES: VoicePreferences = {
-    rate: 0.9,
-    pitch: 0.95,
-    volume: 0.85,
+    rate: 1.0,
+    pitch: 1.0,
+    volume: 1.0,
     language: 'en-US',
     voiceGender: 'neutral',
     verbosity: 'normal',
@@ -38,8 +37,7 @@ export function loadVoicePreferences(): VoicePreferences {
             ...DEFAULT_PREFERENCES,
             ...parsed,
         };
-    } catch (error) {
-        console.error('Failed to load voice preferences:', error);
+    } catch {
         return { ...DEFAULT_PREFERENCES };
     }
 }
@@ -47,8 +45,7 @@ export function loadVoicePreferences(): VoicePreferences {
 export function saveVoicePreferences(preferences: VoicePreferences): void {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch (error) {
-        console.error('Failed to save voice preferences:', error);
+    } catch {
     }
 }
 
