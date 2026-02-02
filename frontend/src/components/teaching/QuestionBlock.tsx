@@ -4,7 +4,7 @@ import { Check, X, Lightbulb, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuestionBlock as QuestionType } from '@/types/teaching';
 
-// Markdown helper function
+
 const renderMarkdownContent = (content: string) => {
     const parts = content.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, index) => {

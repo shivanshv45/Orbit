@@ -1,7 +1,4 @@
-/**
- * Voice Compatibility Warning Dialog
- * Shown when enabling voice mode on non-Chromium browsers
- */
+
 
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,10 +20,10 @@ export function VoiceCompatibilityWarning({
     onCancel,
     onSpeak,
 }: VoiceCompatibilityWarningProps) {
-    // Speak warning when dialog opens
+
     useEffect(() => {
         if (isOpen && compatibility.warningMessage) {
-            // Small delay to ensure dialog is visible first
+
             setTimeout(() => {
                 onSpeak(compatibility.warningMessage || '');
             }, 500);
@@ -49,7 +46,7 @@ export function VoiceCompatibilityWarning({
                     exit={{ opacity: 0, scale: 0.95 }}
                     className="relative w-full max-w-md mx-4 p-6 bg-background rounded-2xl shadow-2xl border border-border"
                 >
-                    {/* Close button */}
+
                     <button
                         onClick={onCancel}
                         className="absolute top-4 right-4 p-2 rounded-lg hover:bg-muted transition-colors"
@@ -58,12 +55,12 @@ export function VoiceCompatibilityWarning({
                         <X className="w-5 h-5" />
                     </button>
 
-                    {/* Warning icon */}
+
                     <div className="flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500/20 mb-4">
                         <AlertTriangle className="w-6 h-6 text-yellow-500" />
                     </div>
 
-                    {/* Title */}
+
                     <h2
                         id="compatibility-warning-title"
                         className="text-xl font-semibold text-foreground mb-2"
@@ -71,12 +68,12 @@ export function VoiceCompatibilityWarning({
                         Browser Compatibility Notice
                     </h2>
 
-                    {/* Browser info */}
+
                     <p className="text-sm text-muted-foreground mb-4">
                         Current browser: <strong>{compatibility.browserName}</strong>
                     </p>
 
-                    {/* Warning message */}
+
                     <div
                         className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 mb-6"
                         role="alert"
@@ -87,7 +84,7 @@ export function VoiceCompatibilityWarning({
                         </p>
                     </div>
 
-                    {/* Feature support */}
+
                     <div className="space-y-2 mb-6">
                         <div className="flex items-center gap-2 text-sm">
                             <div
@@ -105,7 +102,7 @@ export function VoiceCompatibilityWarning({
                         </div>
                     </div>
 
-                    {/* Recommendation */}
+
                     {!compatibility.isFullySupported && (
                         <div className="p-3 rounded-lg bg-muted/50 mb-6">
                             <p className="text-xs text-muted-foreground">
@@ -114,7 +111,7 @@ export function VoiceCompatibilityWarning({
                         </div>
                     )}
 
-                    {/* Actions */}
+
                     <div className="flex gap-3">
                         <button
                             onClick={onCancel}
@@ -132,7 +129,7 @@ export function VoiceCompatibilityWarning({
                         </button>
                     </div>
 
-                    {/* Voice command hint */}
+
                     <p className="text-xs text-center text-muted-foreground mt-4">
                         Say "continue" to proceed or "cancel" to exit
                     </p>

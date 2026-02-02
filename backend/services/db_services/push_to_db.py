@@ -2,6 +2,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from uuid import uuid4
 from datetime import datetime, timezone
+import re
+
+def sanitize_title(title: str) -> str:
+    if not title: return ""
+    title = re.sub(r'^\s*[\d.]+\s+', '', title)
+    title = re.sub(r'[^a-zA-Z0-9\s\-]', '', title)
+    return title.strip()
 
 def user_exist(
         db:Session,
@@ -72,7 +79,7 @@ def upload_to_db(
                 continue
 
             module_id = str(uuid4())
-            module_title = module[0]["title"]
+            module_title = sanitize_title(module[0]["title"])
 
             dbstuf.execute(
                 text("""
@@ -104,7 +111,7 @@ def upload_to_db(
                     {
                         "id": str(uuid4()),
                         "module_id": module_id,
-                        "title": sub["title"],
+                        "title": sanitize_title(sub["title"]),
                         "content": sub["content"],
                         "score": 0,
                         "position": subtopic_position,

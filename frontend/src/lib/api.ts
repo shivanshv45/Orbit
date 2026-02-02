@@ -100,4 +100,28 @@ export const api = {
         if (!res.ok) throw new Error('Failed to submit revision results');
         return res.json();
     },
+
+    pinCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}/pin?user_id=${userId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to pin curriculum');
+        return res.json();
+    },
+
+    archiveCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}/archive?user_id=${userId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to archive curriculum');
+        return res.json();
+    },
+
+    deleteCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}?user_id=${userId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete curriculum');
+        return res.json();
+    },
 };
