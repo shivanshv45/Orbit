@@ -160,51 +160,7 @@ export function VoiceSettings({
                             </p>
                         </div>
 
-
-                        <div className="space-y-2">
-                            <label htmlFor="voice-gender" className="flex items-center gap-2 text-sm font-medium">
-                                <User className="w-4 h-4" />
-                                Voice Gender
-                            </label>
-                            <select
-                                id="voice-gender"
-                                value={preferences.voiceGender || 'neutral'}
-                                onChange={(e) => handleChange({ voiceGender: e.target.value as VoiceGender })}
-                                className="w-full px-4 py-2 rounded-lg bg-muted border border-border focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
-                                aria-label="Select voice gender preference"
-                                aria-describedby="voice-gender-desc"
-                            >
-                                <option value="neutral">Neutral (Auto)</option>
-                                <option value="female">Female</option>
-                                <option value="male">Male</option>
-                            </select>
-                            <p id="voice-gender-desc" className="text-xs text-muted-foreground">
-                                Preferred voice gender (availability depends on browser)
-                            </p>
-                        </div>
-
-
-                        <div className="space-y-2">
-                            <label htmlFor="verbosity" className="flex items-center gap-2 text-sm font-medium">
-                                <Languages className="w-4 h-4" />
-                                Detail Level
-                            </label>
-                            <select
-                                id="verbosity"
-                                value={preferences.verbosity}
-                                onChange={(e) => handleChange({ verbosity: e.target.value as VerbosityLevel })}
-                                className="w-full px-4 py-2 rounded-lg bg-muted border border-border focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
-                                aria-label="Select verbosity level"
-                                aria-describedby="verbosity-desc"
-                            >
-                                <option value="short">Short (Brief summaries)</option>
-                                <option value="normal">Normal (Balanced)</option>
-                                <option value="detailed">Detailed (Full explanations)</option>
-                            </select>
-                            <p id="verbosity-desc" className="text-xs text-muted-foreground">
-                                How much detail to include in explanations
-                            </p>
-                        </div>
+                        {/* Voice Gender and Verbosity settings removed as requested */}
                     </div>
 
 

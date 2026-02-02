@@ -103,3 +103,13 @@ fix_camera_table.sql
 
 
 whats_done.md
+
+# =========================
+# Text-to-Speech Data (Piper)
+# =========================
+backend/piper/
+backend/piper_models/
+backend/piper/espeak-ng-data/
+backend/tts_cache/
+*.onnx
+*.onnx.json

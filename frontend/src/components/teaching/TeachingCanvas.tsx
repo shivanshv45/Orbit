@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb, Sparkles, Mic, MicOff, Settings } from 'lucide-react';
+import { Lightbulb, Sparkles, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
@@ -8,7 +8,8 @@ import { SimulationBlock } from '@/components/teaching/SimulationBlock';
 import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
-import { useVoiceMode } from '@/lib/voice/useVoiceMode';
+import { useAccessibilityMode } from '@/context/AccessibilityModeContext';
+import { VoiceContentConverter } from '@/lib/voice/VoiceContentConverter';
 import { VoiceSettings } from './VoiceSettings';
 import { formatFormula } from '@/lib/formatFormula';
 
@@ -19,8 +20,6 @@ interface TeachingCanvasProps {
   onPrevious?: () => void;
   hasNext: boolean;
   hasPrevious?: boolean;
-  voiceModeEnabled?: boolean;
-
   onNextLesson?: () => void;
   onPreviousLesson?: () => void;
 }
@@ -32,7 +31,6 @@ export function TeachingCanvas({
   onPrevious,
   hasNext,
   hasPrevious = false,
-  voiceModeEnabled = false,
   onNextLesson,
   onPreviousLesson,
 }: TeachingCanvasProps) {
@@ -44,20 +42,28 @@ export function TeachingCanvas({
   const [questionScores, setQuestionScores] = useState<Record<number, number>>({});
   const { uid } = createOrGetUser();
 
+  const {
+    isAccessibilityModeOn,
+    speak,
+    speakMultiple,
+    prefetch,
+    setTeachingCommandHandler,
+    updateSpeed,
+    updatePitch,
+    getPreferences,
+  } = useAccessibilityMode();
+
+  const contentConverterRef = useRef(new VoiceContentConverter('normal'));
+  const lastSpokenSubtopicRef = useRef<string>('');
+  const lastSpokenBlockRef = useRef<number>(-1);
+
   useEffect(() => {
     setCurrentChunkIndex(0);
     setAskAIOpen(null);
     setQuestionAnswered({});
     setQuestionScores({});
+    lastSpokenBlockRef.current = -1;
   }, [subtopicId]);
-
-  if (!blocks || blocks.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-96 text-muted-foreground">
-        Content not available
-      </div>
-    );
-  }
 
   const visibleBlocks = blocks.slice(0, currentChunkIndex + 1);
   const hasMoreChunks = currentChunkIndex < blocks.length - 1;
@@ -67,7 +73,7 @@ export function TeachingCanvas({
   const totalQuestions = questions.length;
   const answeredCount = Object.keys(questionAnswered).length;
 
-  const handleContinue = async () => {
+  const handleContinue = useCallback(async () => {
     if (currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]) {
       return;
     }
@@ -93,9 +99,10 @@ export function TeachingCanvas({
       }
 
       setCurrentChunkIndex(0);
+      lastSpokenBlockRef.current = -1;
       onNext();
     }
-  };
+  }, [currentBlock, currentChunkIndex, hasMoreChunks, questionAnswered, totalQuestions, answeredCount, questionScores, uid, subtopicId, onNext]);
 
   const handleQuestionCorrect = (index: number, attemptCount: number) => {
     setQuestionAnswered(prev => ({ ...prev, [index]: true }));
@@ -106,6 +113,13 @@ export function TeachingCanvas({
     else if (attemptCount === 3) score = 0.5;
 
     setQuestionScores(prev => ({ ...prev, [index]: score }));
+
+    if (isAccessibilityModeOn) {
+      const feedback = attemptCount === 1
+        ? 'Correct! Great job! Say next to continue.'
+        : 'Correct! Say next to continue.';
+      speak(feedback, true);
+    }
   };
 
   const getTextContent = (block: TeachingBlock): string => {
@@ -120,25 +134,148 @@ export function TeachingCanvas({
         return block.items.join(', ');
       case 'question':
         return block.question;
-
       default:
-        return 'This section';
+        return '';
     }
   };
 
+  const speakCurrentBlock = useCallback(() => {
+    if (!isAccessibilityModeOn || !blocks[currentChunkIndex]) return;
+
+    const scripts = contentConverterRef.current.convertBlock(
+      blocks[currentChunkIndex],
+      currentChunkIndex,
+      blocks.length
+    );
+    const texts = scripts.map(s => s.text);
+    speakMultiple(texts);
+
+    const prefetchTexts = contentConverterRef.current.getTextsForPrefetch(
+      blocks,
+      currentChunkIndex + 1,
+      3
+    );
+    if (prefetchTexts.length > 0) {
+      prefetch(prefetchTexts);
+    }
+  }, [isAccessibilityModeOn, blocks, currentChunkIndex, speakMultiple, prefetch]);
+
+  useEffect(() => {
+    if (!isAccessibilityModeOn) return;
+    if (lastSpokenSubtopicRef.current !== subtopicId) {
+      lastSpokenSubtopicRef.current = subtopicId;
+      lastSpokenBlockRef.current = -1;
+    }
+    if (lastSpokenBlockRef.current === currentChunkIndex) return;
+
+    lastSpokenBlockRef.current = currentChunkIndex;
+
+    const timer = setTimeout(() => {
+      speakCurrentBlock();
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [isAccessibilityModeOn, subtopicId, currentChunkIndex, speakCurrentBlock]);
+
+  const handleVoiceCommand = useCallback((transcript: string): boolean => {
+    const normalized = transcript.toLowerCase().trim();
+
+    if (normalized.includes('next') || normalized.includes('continue') || normalized.includes('forward')) {
+      handleContinue();
+      return true;
+    }
+
+    if (normalized.includes('repeat') || normalized.includes('again') || normalized.includes('what')) {
+      lastSpokenBlockRef.current = -1;
+      speakCurrentBlock();
+      return true;
+    }
+
+    if (normalized.includes('previous') && !normalized.includes('lesson')) {
+      if (currentChunkIndex > 0) {
+        setCurrentChunkIndex(prev => prev - 1);
+        lastSpokenBlockRef.current = -1;
+      } else if (onPrevious) {
+        onPrevious();
+      }
+      return true;
+    }
+
+    if (normalized.includes('next lesson')) {
+      if (onNextLesson) {
+        speak('Going to next lesson');
+        setTimeout(() => onNextLesson(), 1500);
+      } else {
+        speak('No next lesson available');
+      }
+      return true;
+    }
+
+    if (normalized.includes('previous lesson') || normalized.includes('last lesson')) {
+      if (onPreviousLesson) {
+        speak('Going to previous lesson');
+        setTimeout(() => onPreviousLesson(), 1500);
+      } else {
+        speak('No previous lesson available');
+      }
+      return true;
+    }
+
+    if (normalized.includes('faster') || normalized.includes('speed up')) {
+      const prefs = getPreferences();
+      updateSpeed(Math.min(2, prefs.rate + 0.2));
+      speak('Speed increased');
+      return true;
+    }
+
+    if (normalized.includes('slower') || normalized.includes('slow down')) {
+      const prefs = getPreferences();
+      updateSpeed(Math.max(0.5, prefs.rate - 0.2));
+      speak('Speed decreased');
+      return true;
+    }
+
+    if (normalized.includes('progress') || normalized.includes('where am i')) {
+      speak(`Section ${currentChunkIndex + 1} of ${blocks.length}`);
+      return true;
+    }
+
+    const optionMatch = normalized.match(/\b(option\s*)?([abcd])\b/);
+    if (optionMatch && currentBlock?.type === 'question') {
+      const option = optionMatch[2].toUpperCase();
+      speak(`Selecting option ${option}`);
+      setTimeout(() => {
+        const btn = document.querySelector(`button[data-option="${option}"]`);
+        if (btn) (btn as HTMLButtonElement).click();
+      }, 500);
+      return true;
+    }
+
+    if ((normalized.includes('submit') || normalized === 'check') && currentBlock?.type === 'question') {
+      speak('Submitting answer');
+      setTimeout(() => {
+        const btn = document.querySelector('button[data-submit-btn="true"]');
+        if (btn) (btn as HTMLButtonElement).click();
+      }, 500);
+      return true;
+    }
+
+    return false;
+  }, [currentChunkIndex, currentBlock, blocks.length, handleContinue, speakCurrentBlock, onPrevious, onNextLesson, onPreviousLesson, speak, updateSpeed, getPreferences]);
+
+  useEffect(() => {
+    if (isAccessibilityModeOn) {
+      setTeachingCommandHandler(handleVoiceCommand);
+      return () => setTeachingCommandHandler(null);
+    }
+  }, [isAccessibilityModeOn, handleVoiceCommand, setTeachingCommandHandler]);
+
   const renderMarkdownContent = (content: string) => {
-
     const parts = content.split(/(\*\*.*?\*\*)/g);
-
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-
         const text = part.slice(2, -2);
-        return (
-          <strong key={index} className="font-semibold text-primary">
-            {text}
-          </strong>
-        );
+        return <strong key={index} className="font-semibold text-primary">{text}</strong>;
       }
       return <span key={index}>{part}</span>;
     });
@@ -154,7 +291,6 @@ export function TeachingCanvas({
         );
 
       case 'formula':
-
         const formulaLength = block.formula?.length || 0;
         const isLongFormula = formulaLength > 50;
         const isVeryLongFormula = formulaLength > 100;
@@ -164,7 +300,6 @@ export function TeachingCanvas({
             "relative p-8 rounded-2xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20",
             "backdrop-blur-sm"
           )}>
-
             <div className="flex flex-col items-center justify-center gap-4">
               <div className={cn(
                 "font-mono text-foreground tracking-wide text-center px-6 py-4",
@@ -172,13 +307,10 @@ export function TeachingCanvas({
                 "shadow-lg",
                 isVeryLongFormula ? "text-lg md:text-xl" : isLongFormula ? "text-xl md:text-2xl" : "text-2xl md:text-3xl"
               )}>
-
                 <code className="whitespace-pre-wrap break-words">
                   {formatFormula(block.formula)}
                 </code>
               </div>
-
-
               {block.explanation && (
                 <p className="text-sm text-muted-foreground text-center max-w-2xl leading-relaxed">
                   {block.explanation}
@@ -216,11 +348,7 @@ export function TeachingCanvas({
         );
 
       case 'simulation':
-        return (
-          <SimulationBlock html={block.html} description={block.description} />
-        );
-
-
+        return <SimulationBlock html={block.html} description={block.description} />;
 
       case 'question':
         return null;
@@ -230,23 +358,13 @@ export function TeachingCanvas({
     }
   };
 
-  const { isListening, startListening, stopListening, speakText, updatePreferences } = useVoiceMode({
-    enabled: voiceModeEnabled,
-    blocks,
-    currentBlockIndex: currentChunkIndex,
-    subtopicId,
-    onNext: handleContinue,
-    onPrevious: onPrevious || (() => { }),
-    onRepeat: () => {
-
-      const currentBlock = blocks[currentChunkIndex];
-      if (currentBlock && speakText) {
-        speakText(getTextContent(currentBlock));
-      }
-    },
-    onNextLesson,
-    onPreviousLesson,
-  });
+  if (!blocks || blocks.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-96 text-muted-foreground">
+        Content not available
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -268,8 +386,7 @@ export function TeachingCanvas({
             </div>
           </div>
 
-
-          {voiceModeEnabled && (
+          {isAccessibilityModeOn && (
             <button
               onClick={() => setSettingsOpen(true)}
               className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -318,6 +435,7 @@ export function TeachingCanvas({
                 >
                   <button
                     onClick={() => setAskAIOpen(askAIOpen === index ? null : index)}
+                    data-ask-ai="true"
                     className={cn(
                       "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all",
                       askAIOpen === index
@@ -345,7 +463,6 @@ export function TeachingCanvas({
         </AnimatePresence>
       </div>
 
-
       <motion.div
         key={`continue-${currentChunkIndex}`}
         initial={{ opacity: 0, y: 10 }}
@@ -354,7 +471,6 @@ export function TeachingCanvas({
         className="pt-4"
       >
         <div className="flex gap-3 items-center">
-
           <button
             onClick={handleContinue}
             disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
@@ -367,37 +483,17 @@ export function TeachingCanvas({
           >
             {hasMoreChunks ? 'Continue' : (hasNext ? 'Next Lesson' : 'Complete')}
           </button>
-
-          {voiceModeEnabled && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              onClick={isListening ? stopListening : startListening}
-              className={cn(
-                "h-14 w-14 rounded-2xl transition-all duration-200 flex items-center justify-center",
-                "border-2 shadow-lg",
-                isListening
-                  ? "bg-red-500 border-red-600 hover:bg-red-600 animate-pulse"
-                  : "bg-primary/10 border-primary/30 hover:bg-primary/20"
-              )}
-              aria-label={isListening ? "Stop listening" : "Start listening"}
-            >
-              {isListening ? (
-                <MicOff className="w-6 h-6 text-red-500" />
-              ) : (
-                <Mic className="w-6 h-6 text-primary" />
-              )}
-            </motion.button>
-          )}
         </div>
       </motion.div>
-
 
       <VoiceSettings
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onPreferencesChange={updatePreferences}
-        onTestVoice={speakText}
+        onPreferencesChange={(prefs) => {
+          if (prefs.rate) updateSpeed(prefs.rate);
+          if (prefs.pitch) updatePitch(prefs.pitch);
+        }}
+        onTestVoice={(text) => speak(text, true)}
       />
     </div>
   );

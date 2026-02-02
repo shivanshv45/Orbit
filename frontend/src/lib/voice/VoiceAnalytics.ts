@@ -1,4 +1,3 @@
-
 import type { VoiceAnalyticsEvent } from '@/types/voice';
 
 interface AnalyticsSession {

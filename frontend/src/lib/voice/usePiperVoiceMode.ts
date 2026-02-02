@@ -7,7 +7,7 @@ import { VoiceContentConverter } from './VoiceContentConverter';
 import { VoiceAnalytics } from './VoiceAnalytics';
 import { createOrGetUser } from '@/logic/userSession';
 
-interface UseVoiceModeProps {
+interface UsePiperVoiceModeProps {
     enabled: boolean;
     blocks: TeachingBlock[];
     currentBlockIndex: number;
@@ -17,9 +17,11 @@ interface UseVoiceModeProps {
     onRepeat: () => void;
     onNextLesson?: () => void;
     onPreviousLesson?: () => void;
+    onAnswerSelect?: (option: string) => void;
+    onAnswerSubmit?: () => void;
 }
 
-export function useVoiceMode({
+export function usePiperVoiceMode({
     enabled,
     blocks,
     currentBlockIndex,
@@ -29,7 +31,9 @@ export function useVoiceMode({
     onRepeat,
     onNextLesson,
     onPreviousLesson,
-}: UseVoiceModeProps) {
+    onAnswerSelect,
+    onAnswerSubmit,
+}: UsePiperVoiceModeProps) {
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const voiceEngineRef = useRef<PiperVoiceEngine | null>(null);
@@ -157,6 +161,10 @@ export function useVoiceMode({
             });
         }
 
+        executeCommand(command);
+    }, [blocks, currentBlockIndex]);
+
+    const executeCommand = useCallback((command: any) => {
         switch (command.action) {
             case 'next':
                 onNext();
@@ -225,27 +233,30 @@ export function useVoiceMode({
                 if (command.parameters?.option) {
                     const option = command.parameters.option.toUpperCase();
                     voiceEngineRef.current?.speak(`Selecting option ${option}`);
-
-                    setTimeout(() => {
-                        const optionButton = document.querySelector(`button[data-option="${option}"]`);
-                        if (optionButton) {
-                            (optionButton as HTMLButtonElement).click();
-                        } else {
-                            voiceEngineRef.current?.speak(`Could not find option ${option}`);
-                        }
-                    }, 500);
+                    if (onAnswerSelect) {
+                        setTimeout(() => onAnswerSelect(option), 500);
+                    } else {
+                        setTimeout(() => {
+                            const optionButton = document.querySelector(`button[data-option="${option}"]`);
+                            if (optionButton) {
+                                (optionButton as HTMLButtonElement).click();
+                            }
+                        }, 500);
+                    }
                 }
                 break;
             case 'submit_answer':
                 voiceEngineRef.current?.speak('Submitting answer');
-                setTimeout(() => {
-                    const submitButton = document.querySelector('button[data-submit-btn="true"]');
-                    if (submitButton) {
-                        (submitButton as HTMLButtonElement).click();
-                    } else {
-                        voiceEngineRef.current?.speak('Submit button not found');
-                    }
-                }, 500);
+                if (onAnswerSubmit) {
+                    setTimeout(() => onAnswerSubmit(), 500);
+                } else {
+                    setTimeout(() => {
+                        const submitButton = document.querySelector('button[data-submit-btn="true"]');
+                        if (submitButton) {
+                            (submitButton as HTMLButtonElement).click();
+                        }
+                    }, 500);
+                }
                 break;
             case 'fill_in':
                 if (command.parameters?.answer) {
@@ -256,25 +267,10 @@ export function useVoiceMode({
                 voiceEngineRef.current?.speak('Starting lesson');
                 speakCurrentBlock();
                 break;
-            case 'camera_on':
-            case 'camera_off':
-                const cameraBtn = document.querySelector('[data-camera-toggle]');
-                if (cameraBtn) {
-                    (cameraBtn as HTMLButtonElement).click();
-                    voiceEngineRef.current?.speak('Camera toggled');
-                }
-                break;
-            case 'ask_ai':
-                const askAIBtn = document.querySelector('[data-ask-ai]');
-                if (askAIBtn) {
-                    (askAIBtn as HTMLButtonElement).click();
-                    voiceEngineRef.current?.speak('Opening Ask AI');
-                }
-                break;
             default:
                 voiceEngineRef.current?.speak("Command recognized but not yet implemented.");
         }
-    }, [blocks, currentBlockIndex, onNext, onPrevious, onRepeat, onNextLesson, onPreviousLesson, speakCurrentBlock]);
+    }, [blocks, currentBlockIndex, onNext, onPrevious, onRepeat, onNextLesson, onPreviousLesson, onAnswerSelect, onAnswerSubmit, speakCurrentBlock]);
 
     const startListening = useCallback(() => {
         if (enabled && voiceEngineRef.current) {
@@ -302,6 +298,12 @@ export function useVoiceMode({
         }
     }, []);
 
+    const setContinuousMode = useCallback((enabled: boolean) => {
+        if (voiceEngineRef.current) {
+            voiceEngineRef.current.setContinuousMode(enabled);
+        }
+    }, []);
+
     return {
         isListening,
         isSpeaking,
@@ -309,5 +311,6 @@ export function useVoiceMode({
         stopListening,
         speakText,
         updatePreferences,
+        setContinuousMode,
     };
 }
