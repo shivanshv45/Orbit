@@ -197,7 +197,3 @@ See `FEATURE_ORDER.md` for the complete roadmap. Priority features:
 ## 📄 License
 
 Private project - All rights reserved
-
----
-
-Built with ❤️ using AI-powered learning technology

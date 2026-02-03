@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
 import { SimulationBlock } from '@/components/teaching/SimulationBlock';
-import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
+import type { TeachingBlock } from '@/types/teaching';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
 import { useAccessibilityMode } from '@/context/AccessibilityModeContext';
@@ -30,7 +30,6 @@ export function TeachingCanvas({
   onNext,
   onPrevious,
   hasNext,
-  hasPrevious = false,
   onNextLesson,
   onPreviousLesson,
 }: TeachingCanvasProps) {
