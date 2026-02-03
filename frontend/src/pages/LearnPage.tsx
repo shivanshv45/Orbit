@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, Video, VideoOff, Mic, MicOff } from 'lucide-react';
+import { Loader2, Video, VideoOff } from 'lucide-react';
 import { CameraFeedback } from '@/components/teaching/CameraFeedback';
 import { TopicNavigator } from '@/components/layout/TopicNavigator';
 import { ProgressIndicator } from '@/components/layout/ProgressIndicator';
 import { TeachingCanvas } from '@/components/teaching/TeachingCanvas';
-import { VoiceCompatibilityWarning } from '@/components/teaching/VoiceCompatibilityWarning';
-import { PiperVoiceEngine } from '@/lib/voice/PiperVoiceEngine';
-import { loadVoicePreferences } from '@/lib/voice/VoicePreferences';
-import { getBrowserCompatibility } from '@/lib/voice/browserCompatibility';
 import { useCurriculum } from '@/hooks/useCurriculum';
 import { useTeachingContent } from '@/hooks/useTeachingContent';
 import { useFaceTracking } from '@/hooks/useFaceTracking';
@@ -25,34 +21,34 @@ export default function LearnPage() {
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
-  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
-  const [tempVoiceEngine, setTempVoiceEngine] = useState<PiperVoiceEngine | null>(null);
   const { user, isLoaded } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
-  // const queryClient = useQueryClient(); // Not using queryClient directly right now, preventing error. 
-  // Actually, wait, line 65 uses queryClient.prefetchQuery. So I need to import useQueryClient again.
-  const queryClient = useQueryClient();
 
-  const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const urlCurriculumId = searchParams.get('id') || undefined;
+  const [curriculumId, setCurriculumId] = useState(urlCurriculumId);
+
+  const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum(curriculumId);
   const { data: teachingData, isLoading: teachingLoading, error } = useTeachingContent(currentSubtopicId);
 
-  // Face tracking hook
+  useEffect(() => {
+    if (urlCurriculumId) {
+      setCurriculumId(urlCurriculumId);
+    }
+  }, [urlCurriculumId]);
+
+  useEffect(() => {
+    if (teachingData?.curriculum_id && !urlCurriculumId) {
+      setCurriculumId(teachingData.curriculum_id);
+    }
+  }, [teachingData, urlCurriculumId]);
+
+
   const { isActive: cameraActive, currentMetrics } = useFaceTracking(currentSubtopicId, cameraEnabled);
 
-  // Load voice mode preference on mount
-  useEffect(() => {
-    const prefs = loadVoicePreferences();
-    if (prefs.visualImpairmentMode === true) {
-      setVoiceModeEnabled(true);
-    }
 
-    const storedPref = localStorage.getItem('orbit_voice_mode_enabled');
-    if (storedPref === 'true') {
-      // Don't auto-enable, just remember the preference
-      // User must explicitly enable each session for safety
-    }
-  }, []);
+
 
   // Log metrics for debugging
   useEffect(() => {
@@ -61,7 +57,7 @@ export default function LearnPage() {
     }
   }, [cameraEnabled, currentMetrics]);
 
-  // Calculate Stats locally from curriculum data
+
   const calculateStreak = () => {
     try {
       const stored = localStorage.getItem('orbit_streak_data');
@@ -85,7 +81,7 @@ export default function LearnPage() {
         localStorage.setItem('orbit_streak_data', JSON.stringify({ count: newCount, lastDate: today }));
         return newCount;
       } else {
-        // Streak broken
+
         localStorage.setItem('orbit_streak_data', JSON.stringify({ count: 1, lastDate: today }));
         return 1;
       }
@@ -97,7 +93,7 @@ export default function LearnPage() {
 
   const streak = calculateStreak();
 
-  // Update current subtopic when URL changes
+
   useEffect(() => {
     if (subtopicId) {
       setCurrentSubtopicId(subtopicId);
@@ -119,20 +115,25 @@ export default function LearnPage() {
     ? allSubtopics[currentIndex - 1]
     : null;
 
-  // Prefetch next subtopic
   useEffect(() => {
-    if (nextSubtopic && nextSubtopic.id) {
+    if (!nextSubtopic?.id || !teachingData) return;
+
+    const timer = setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ['teaching', nextSubtopic.id],
         queryFn: () => api.getTeachingContent(nextSubtopic.id, uid),
         staleTime: Infinity,
       });
-    }
-  }, [nextSubtopic, queryClient, uid]);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [nextSubtopic, queryClient, uid, teachingData]);
+
+
 
   const handleSelectSubtopic = (id: string) => {
     setCurrentSubtopicId(id);
-    navigate(`/learn/${id}`, { replace: true });
+    navigate(`/learn/${id}${curriculumId ? `?id=${curriculumId}` : ''}`, { replace: true });
   };
 
   const handleNext = () => {
@@ -142,7 +143,7 @@ export default function LearnPage() {
     if (nextSubtopic) {
       handleSelectSubtopic(nextSubtopic.id);
     } else {
-      navigate('/curriculum');
+      navigate(curriculumId ? `/curriculum?id=${curriculumId}` : '/curriculum');
     }
   };
 
@@ -156,7 +157,7 @@ export default function LearnPage() {
   };
 
   const handleBack = () => {
-    navigate('/curriculum');
+    navigate(curriculumId ? `/curriculum?id=${curriculumId}` : '/curriculum');
   };
 
   // Keyboard Navigation
@@ -176,47 +177,7 @@ export default function LearnPage() {
   }, [nextSubtopic, previousSubtopic, navigate]); // Add simpler dependencies if possible, or assume handlers are stable if wrapped (they aren't wrapped in useCallback currently)
 
 
-  // Handle voice mode toggle
-  const handleVoiceToggle = () => {
-    if (!voiceModeEnabled) {
-      // Check browser compatibility before enabling
-      const compatibility = getBrowserCompatibility();
 
-      if (!compatibility.isFullySupported && compatibility.warningMessage) {
-        // Show warning dialog and create temp voice engine for speaking the warning
-        setShowCompatibilityWarning(true);
-        const engine = new PiperVoiceEngine();
-        setTempVoiceEngine(engine);
-      } else {
-        // Fully supported, enable immediately
-        setVoiceModeEnabled(true);
-        localStorage.setItem('orbit_voice_mode_enabled', 'true');
-      }
-    } else {
-      // Disable voice mode
-      setVoiceModeEnabled(false);
-      localStorage.setItem('orbit_voice_mode_enabled', 'false');
-    }
-  };
-
-  // Handle compatibility warning response
-  const handleCompatibilityConfirm = () => {
-    setShowCompatibilityWarning(false);
-    setVoiceModeEnabled(true);
-    localStorage.setItem('orbit_voice_mode_enabled', 'true');
-    tempVoiceEngine?.destroy();
-    setTempVoiceEngine(null);
-  };
-
-  const handleCompatibilityCancel = () => {
-    setShowCompatibilityWarning(false);
-    tempVoiceEngine?.destroy();
-    setTempVoiceEngine(null);
-  };
-
-  const handleSpeak = (text: string) => {
-    tempVoiceEngine?.speak(text);
-  };
 
   // Calculate some stats for progress panel
   // Calculate some stats for progress panel
@@ -289,19 +250,6 @@ export default function LearnPage() {
             )}
           </button>
 
-          <button
-            onClick={handleVoiceToggle}
-            className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 shadow-sm hover:shadow-md"
-            title={voiceModeEnabled ? "Disable Voice Mode" : "Enable Voice Mode"}
-            aria-label={voiceModeEnabled ? "Disable voice learning mode" : "Enable voice learning mode"}
-          >
-            {voiceModeEnabled ? (
-              <Mic className="w-5 h-5 text-primary" />
-            ) : (
-              <MicOff className="w-5 h-5" />
-            )}
-          </button>
-
           {cameraEnabled && cameraActive && currentMetrics && (
             <CameraFeedback metrics={currentMetrics} expanded={true} />
           )}
@@ -359,14 +307,6 @@ export default function LearnPage() {
         </div>
       </main>
 
-      {/* Voice Compatibility Warning */}
-      <VoiceCompatibilityWarning
-        isOpen={showCompatibilityWarning}
-        compatibility={getBrowserCompatibility()}
-        onContinue={handleCompatibilityConfirm}
-        onCancel={handleCompatibilityCancel}
-        onSpeak={handleSpeak}
-      />
 
       {/* Right Sidebar - Progress (Toggleable) */}
       <ProgressIndicator

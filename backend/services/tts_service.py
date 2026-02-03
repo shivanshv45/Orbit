@@ -1,13 +1,11 @@
 import os
 import hashlib
-import wave
-import io
+import sys
 from pathlib import Path
 from typing import Optional
 import subprocess
 import tempfile
 import asyncio
-from functools import lru_cache
 
 PIPER_BINARY = os.getenv("PIPER_BINARY_PATH", "piper")
 PIPER_MODEL = os.getenv("PIPER_MODEL_PATH", "en_US-amy-medium.onnx")
@@ -19,6 +17,7 @@ class TTSService:
         self.model_path = PIPER_MODEL
         self.cache_dir = CACHE_DIR
         self._rate = 1.0
+        self._lock = asyncio.Lock()
         
     def _get_cache_key(self, text: str, rate: float = 1.0) -> str:
         content = f"{text}:{rate}:{self.model_path}"
@@ -50,9 +49,7 @@ class TTSService:
         
         return audio_data
     
-    
-
-    async def _generate_audio(self, text: str, rate: float = 1.0) -> bytes:
+    def _generate_audio_sync(self, text: str, rate: float = 1.0) -> bytes:
         output_path = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
@@ -67,18 +64,17 @@ class TTSService:
                 "--length_scale", str(length_scale)
             ]
             
-            # Set cwd to piper directory to find local DLLs
-            piper_dir = os.path.dirname(PIPER_BINARY)
+            piper_dir = os.path.dirname(PIPER_BINARY) if os.path.dirname(PIPER_BINARY) else None
             
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 cwd=piper_dir
             )
             
-            stdout, stderr = await process.communicate(input=text.encode("utf-8"))
+            stdout, stderr = process.communicate(input=text.encode("utf-8"), timeout=30)
             
             if process.returncode != 0:
                 print(f"Piper execution failed with code {process.returncode}")
@@ -92,6 +88,11 @@ class TTSService:
             
             return b""
             
+        except subprocess.TimeoutExpired:
+            print("Piper TTS timeout")
+            if process:
+                process.kill()
+            return b""
         except Exception as e:
             print(f"Piper TTS exception: {repr(e)}")
             return b""
@@ -101,10 +102,18 @@ class TTSService:
                     os.unlink(output_path)
                 except Exception:
                     pass
+
+    async def _generate_audio(self, text: str, rate: float = 1.0) -> bytes:
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self._generate_audio_sync, text, rate)
     
     async def synthesize_batch(self, texts: list[str], rate: float = 1.0) -> list[bytes]:
-        tasks = [self.synthesize(text, rate) for text in texts]
-        return await asyncio.gather(*tasks)
+        results = []
+        for text in texts:
+            result = await self.synthesize(text, rate)
+            results.append(result)
+        return results
     
     def clear_cache(self) -> int:
         count = 0

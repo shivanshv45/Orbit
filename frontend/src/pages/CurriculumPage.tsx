@@ -41,7 +41,11 @@ export default function CurriculumPage() {
   }, [data?.curriculum_id, uid]);
 
   const handleStartLesson = (subtopicId: string) => {
-    navigate(`/learn/${subtopicId}`);
+    if (data?.curriculum_id) {
+      navigate(`/learn/${subtopicId}?id=${data.curriculum_id}`);
+    } else {
+      navigate(`/learn/${subtopicId}`);
+    }
   };
 
   const handleOpenRevision = () => {

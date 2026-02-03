@@ -15,6 +15,20 @@ async def get_teaching_content(
     db: Session = Depends(get_session)
 ):
     try:
+        
+        subtopic = db.execute(
+            text("""
+                SELECT s.title, s.content, s.score, m.curriculum_id 
+                FROM subtopics s
+                JOIN modules m ON s.module_id = m.id
+                WHERE s.id = :sid
+            """),
+            {"sid": subtopic_id}
+        ).fetchone()
+        
+        if not subtopic:
+            raise HTTPException(status_code=404, detail="Subtopic not found")
+
         cached = db.execute(
             text("SELECT blocks_json FROM teaching_blocks WHERE subtopic_id = :sid"),
             {"sid": subtopic_id}
@@ -26,16 +40,11 @@ async def get_teaching_content(
             print(f"[DEBUG] Returning cached blocks: {len(blocks_data)} blocks")
             return {
                 "blocks": blocks_data,
-                "cached": True
+                "cached": True,
+                "curriculum_id": subtopic.curriculum_id
             }
         
-        subtopic = db.execute(
-            text("SELECT title, content, score FROM subtopics WHERE id = :sid"),
-            {"sid": subtopic_id}
-        ).fetchone()
-        
-        if not subtopic:
-            raise HTTPException(status_code=404, detail="Subtopic not found")
+
         
         user_score_result = db.execute(
             text("""
@@ -77,7 +86,8 @@ async def get_teaching_content(
         print(f"[DEBUG] Returning {len(blocks_list)} blocks to frontend")
         return {
             "blocks": blocks_list,
-            "cached": False
+            "cached": False,
+            "curriculum_id": subtopic.curriculum_id
         }
     except HTTPException:
         raise

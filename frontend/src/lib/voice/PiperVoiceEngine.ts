@@ -1,286 +1,322 @@
-import type { VoicePreferences, VoiceEngineConfig } from '@/types/voice';
-import { loadVoicePreferences, validatePreferences } from './VoicePreferences';
+import type { VoicePreferences } from '@/types/voice';
+import { loadVoicePreferences, validatePreferences, updateVoicePreferences } from './VoicePreferences';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const VOICE_CACHE_BASE = '/voice_cache';
 
-interface AudioCacheEntry {
-    url: string;
-    timestamp: number;
+let manifest: Record<string, string> = {};
+let manifestLoaded = false;
+
+async function loadManifest(): Promise<void> {
+    if (manifestLoaded) return;
+    try {
+        const res = await fetch(`${VOICE_CACHE_BASE}/manifest.json`);
+        if (res.ok) manifest = await res.json();
+    } catch { }
+    manifestLoaded = true;
 }
 
 export class PiperVoiceEngine {
     private preferences: VoicePreferences;
-    private config: VoiceEngineConfig;
+    private audioCache: Map<string, string> = new Map();
+    private pendingFetches: Map<string, Promise<string | null>> = new Map();
+    private currentAudio: HTMLAudioElement | null = null;
+    private speechQueue: string[] = [];
+    private isProcessingQueue = false;
     private isSpeaking = false;
     private isListening = false;
-    private isInitializing = false;
-    private shouldBeListening = false;
-    private speechQueue: { text: string; delay: number }[] = [];
-    private currentAudio: HTMLAudioElement | null = null;
+
     private recognition: any = null;
-    private audioCache: Map<string, AudioCacheEntry> = new Map();
-    private maxCacheSize = 100;
-    private resultReceived = false;
 
-    // We preload these to make interactions snappy
-    private commonPhrases: string[] = [
-        'Visual impairment mode on', 'Visual impairment mode off',
-        'Listening', 'Yes', 'No', 'Next', 'Back', 'Stop', 'Help', 'Repeat',
-        'Correct', 'Incorrect', 'Option A', 'Option B', 'Option C', 'Option D'
-    ];
+    private onResult: ((text: string) => void) | null = null;
+    private onListeningChange: ((listening: boolean) => void) | null = null;
+    private onSpeakingChange: ((speaking: boolean) => void) | null = null;
 
-    constructor(config: VoiceEngineConfig = {}) {
-        this.config = config;
+    constructor() {
         this.preferences = validatePreferences(loadVoicePreferences());
+        loadManifest();
+        this.initRecognition();
     }
 
-    public async preloadCommonPhrases(): Promise<void> {
-        this.commonPhrases.forEach(text => this.fetchAudio(text).catch(() => { }));
-    }
-
-    private async initializeRecognition(): Promise<boolean> {
-        if (this.recognition) return true;
-        if (this.isInitializing) return false;
-
-        this.isInitializing = true;
-        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-        if (!SpeechRecognitionAPI) {
-            console.error('Speech Recognition not supported');
-            this.isInitializing = false;
-            return false;
+    private initRecognition(): void {
+        const SpeechAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechAPI) {
+            console.warn('Speech recognition not supported - use Chrome or Edge');
+            return;
         }
 
         try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            this.recognition = new SpeechRecognitionAPI();
+            this.recognition = new SpeechAPI();
             this.recognition.continuous = false;
-            this.recognition.interimResults = true;
-            this.recognition.lang = this.preferences.language || 'en-US';
+            this.recognition.interimResults = false;
+            this.recognition.lang = 'en-US';
             this.recognition.maxAlternatives = 1;
-            this.setupRecognitionHandlers();
 
-            this.isInitializing = false;
+            this.recognition.onstart = () => {
+                if (!this.isListening) {
+                    this.isListening = true;
+                    this.onListeningChange?.(true);
+                    console.log('Listening...');
+                }
+            };
+
+            this.recognition.onresult = (e: any) => {
+                const text = e.results[0][0].transcript.trim();
+                console.log('Heard:', text);
+                if (text && this.onResult) {
+                    this.onResult(text);
+                }
+            };
+
+            this.recognition.onerror = (e: any) => {
+                if (e.error !== 'aborted' && e.error !== 'no-speech') {
+                    console.log('Recognition error:', e.error);
+                    if (e.error === 'network') {
+                        this.speak('Voice commands require Chrome or Edge browser');
+                    }
+                }
+                this.isListening = false;
+                this.onListeningChange?.(false);
+            };
+
+            this.recognition.onend = () => {
+                if (this.isListening) {
+                    this.isListening = false;
+                    this.onListeningChange?.(false);
+                }
+            };
+
+        } catch (e) {
+            console.error('Failed to init recognition:', e);
+        }
+    }
+
+    public setCallbacks(
+        onResult: (text: string) => void,
+        onListeningChange: (listening: boolean) => void,
+        onSpeakingChange: (speaking: boolean) => void
+    ): void {
+        this.onResult = onResult;
+        this.onListeningChange = onListeningChange;
+        this.onSpeakingChange = onSpeakingChange;
+    }
+
+    public async requestMic(): Promise<boolean> {
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
             return true;
-        } catch (error) {
-            console.error('Microphone init failed:', error);
-            if (this.config.onError) this.config.onError(new Error('Microphone blocked.'));
-            this.isInitializing = false;
+        } catch (e) {
+            console.error('Mic access denied:', e);
             return false;
         }
     }
 
-    private setupRecognitionHandlers(): void {
-        if (!this.recognition) return;
-
-        this.recognition.onstart = () => {
-            this.isListening = true;
-            this.resultReceived = false;
-            if (this.config.onListeningChange) this.config.onListeningChange(true);
-
-            if (!this.shouldBeListening) this.stopListening();
-        };
-
-        this.recognition.onresult = (event: any) => {
-            const results = event.results[event.resultIndex];
-            const transcript = results[0].transcript.trim();
-            const confidence = results[0].confidence;
-
-            if (results.isFinal && transcript) {
-                this.resultReceived = true;
-                if (this.config.onRecognitionResult) {
-                    this.config.onRecognitionResult(transcript, confidence);
-                }
-            }
-        };
-
-        this.recognition.onerror = (event: any) => {
-            if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
-                // Ignore
-            } else {
-                console.warn('Recognition error:', event.error);
-            }
-        };
-
-        this.recognition.onend = () => {
-            this.isListening = false;
-
-            // If user is still holding key, restart (network drop case)
-            if (this.shouldBeListening) {
-                setTimeout(() => {
-                    if (this.shouldBeListening && !this.isListening) {
-                        try { this.recognition.start(); } catch (e) { }
-                    }
-                }, 50);
-            } else {
-                if (this.config.onListeningChange) this.config.onListeningChange(false);
-
-                // If we stopped naturally and got NO result (silence), notify config
-                if (!this.resultReceived && this.config.onNoSpeechDetected) {
-                    this.config.onNoSpeechDetected();
-                }
-            }
-        };
-    }
-
-    public async startListening(): Promise<void> {
-        this.shouldBeListening = true;
-        this.resultReceived = false;
-
+    public startListening(): void {
         if (!this.recognition) {
-            const success = await this.initializeRecognition();
-            if (!success) {
-                this.shouldBeListening = false;
-                return;
-            }
-            this.preloadCommonPhrases();
+            this.speak('Voice commands not supported. Use Chrome or Edge.');
+            return;
         }
 
-        if (!this.shouldBeListening) return;
         if (this.isListening) return;
+
+        this.stopSpeaking();
 
         try {
             this.recognition.start();
-        } catch (error) {
-            // Already started or busy
+        } catch (e: any) {
+            if (e.message && e.message.includes('already started')) {
+                console.log('Recognition already running');
+            } else {
+                console.log('Recognition start failed:', e);
+            }
         }
     }
 
     public stopListening(): void {
-        this.shouldBeListening = false;
-        if (!this.recognition) return;
-        try { this.recognition.stop(); } catch (error) { }
-    }
-
-    // --- Audio & Caching ---
-
-    private getCacheKey(text: string): string {
-        return `${text}:${this.preferences.rate}:${this.preferences.pitch}`;
-    }
-
-    private cleanCache(): void {
-        if (this.audioCache.size > this.maxCacheSize) {
-            const keys = Array.from(this.audioCache.keys());
-            for (let i = 0; i < Math.floor(keys.length * 0.2); i++) {
-                URL.revokeObjectURL(this.audioCache.get(keys[i])!.url);
-                this.audioCache.delete(keys[i]);
-            }
-        }
-    }
-
-    private async fetchAudio(text: string): Promise<string | null> {
-        if (!text) return null;
-        const cacheKey = this.getCacheKey(text);
-        if (this.audioCache.has(cacheKey)) {
-            const entry = this.audioCache.get(cacheKey)!;
-            entry.timestamp = Date.now();
-            return entry.url;
-        }
+        if (!this.recognition || !this.isListening) return;
 
         try {
-            const response = await fetch(`${API_BASE}/api/voice/synthesize`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text,
-                    rate: this.preferences.rate,
-                    pitch: this.preferences.pitch
-                })
-            });
+            this.recognition.stop();
+        } catch { }
 
-            if (!response.ok) throw new Error('TTS Failed');
-
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            this.audioCache.set(cacheKey, { url, timestamp: Date.now() });
-            this.cleanCache();
-            return url;
-        } catch (e) {
-            console.error('TTS Error', e);
-            return null;
-        }
+        this.isListening = false;
+        this.onListeningChange?.(false);
     }
 
-    public prefetch(texts: string[]): void {
-        texts.forEach(text => {
-            if (!this.audioCache.has(this.getCacheKey(text))) {
-                this.fetchAudio(text).catch(() => { });
+    public stopSpeaking(): void {
+        this.isProcessingQueue = false;
+        this.speechQueue = [];
+
+        if (this.currentAudio) {
+            try {
+                this.currentAudio.pause();
+                this.currentAudio.currentTime = 0;
+                this.currentAudio.src = '';
+                this.currentAudio.load();
+            } catch (e) {
             }
-        });
+            try {
+                this.currentAudio.remove?.();
+            } catch (e) {
+            }
+            this.currentAudio = null;
+        }
+
+        this.isSpeaking = false;
+        this.onSpeakingChange?.(false);
     }
 
-    public async speak(text: string, interrupt: boolean = false): Promise<void> {
-        if (!text) return;
+    public speak(text: string, interrupt = true): void {
+        if (!text?.trim()) return;
 
         if (interrupt) {
-            this.stop();
-        } else if (this.isSpeaking) {
-            this.speechQueue.push({ text, delay: 0 });
-            return;
+            this.stopSpeaking();
         }
 
-        this.isSpeaking = true;
-        if (this.config.onSpeechStart) this.config.onSpeechStart();
+        this.speechQueue.push(text);
 
-        const url = await this.fetchAudio(text);
-
-        if (!this.isSpeaking) return;
-
-        if (url) {
-            this.currentAudio = new Audio(url);
-            this.currentAudio.onended = () => {
-                this.isSpeaking = false;
-                if (this.config.onSpeechEnd) this.config.onSpeechEnd();
-                this.processQueue();
-            };
-            this.currentAudio.onerror = () => {
-                this.isSpeaking = false;
-                this.processQueue();
-            };
-            await this.currentAudio.play();
-        } else {
-            this.isSpeaking = false;
+        if (!this.isProcessingQueue) {
             this.processQueue();
         }
     }
 
-    private processQueue(): void {
-        if (this.speechQueue.length > 0) {
-            const next = this.speechQueue.shift()!;
-            this.speak(next.text, true);
-        }
+    public speakMultiple(texts: string[]): void {
+        const filtered = texts.filter(t => t?.trim());
+        if (filtered.length === 0) return;
+
+        this.stopSpeaking();
+        this.speechQueue = [...filtered];
+        this.processQueue();
     }
 
-    public stop(): void {
-        if (this.currentAudio) {
-            this.currentAudio.pause();
-            this.currentAudio = null;
+    private async processQueue(): Promise<void> {
+        if (this.isProcessingQueue) return;
+
+        if (this.speechQueue.length === 0) {
+            this.isSpeaking = false;
+            this.onSpeakingChange?.(false);
+            return;
         }
-        this.speechQueue = [];
+
+        this.isProcessingQueue = true;
+        this.isSpeaking = true;
+        this.onSpeakingChange?.(true);
+
+        while (this.speechQueue.length > 0 && this.isProcessingQueue) {
+            if (!this.isProcessingQueue) break;
+
+            const text = this.speechQueue.shift()!;
+            await this.playText(text);
+        }
+
+        this.isProcessingQueue = false;
         this.isSpeaking = false;
-        if (this.config.onSpeechEnd) this.config.onSpeechEnd();
+        this.onSpeakingChange?.(false);
     }
 
-    public pause(): void {
-        if (this.currentAudio) this.currentAudio.pause();
+    private async playText(text: string): Promise<void> {
+        if (!this.isProcessingQueue) return;
+
+        const audioUrl = await this.getAudioUrl(text);
+        if (!audioUrl || !this.isProcessingQueue) return;
+
+        return new Promise<void>((resolve) => {
+            if (!this.isProcessingQueue) {
+                resolve();
+                return;
+            }
+
+            const audio = new Audio(audioUrl);
+            this.currentAudio = audio;
+
+            const cleanup = () => {
+                if (this.currentAudio === audio) {
+                    this.currentAudio = null;
+                }
+                resolve();
+            };
+
+            audio.onended = cleanup;
+            audio.onerror = cleanup;
+
+            audio.play().catch(cleanup);
+        });
     }
 
-    public resume(): void {
-        if (this.currentAudio && this.currentAudio.paused) this.currentAudio.play();
+    private async getAudioUrl(text: string): Promise<string | null> {
+        const key = text.toLowerCase().trim();
+
+        if (this.audioCache.has(key)) {
+            return this.audioCache.get(key)!;
+        }
+
+        if (this.pendingFetches.has(key)) {
+            return this.pendingFetches.get(key)!;
+        }
+
+        const staticFile = manifest[key];
+        if (staticFile) {
+            const url = `${VOICE_CACHE_BASE}/${staticFile}`;
+            this.audioCache.set(key, url);
+            return url;
+        }
+
+        const fetchPromise = this.fetchAudio(text, key);
+        this.pendingFetches.set(key, fetchPromise);
+
+        const url = await fetchPromise;
+        this.pendingFetches.delete(key);
+
+        return url;
+    }
+
+    private async fetchAudio(text: string, key: string): Promise<string | null> {
+        try {
+            const res = await fetch(`${API_BASE}/api/voice/synthesize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, rate: this.preferences.rate || 1.0 })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 100) {
+                    const url = URL.createObjectURL(blob);
+                    this.audioCache.set(key, url);
+                    return url;
+                }
+            }
+        } catch { }
+
+        return null;
+    }
+
+    public prefetch(texts: string[]): void {
+        texts.forEach(text => {
+            const key = text.toLowerCase().trim();
+            if (!this.audioCache.has(key) && !this.pendingFetches.has(key)) {
+                this.getAudioUrl(text);
+            }
+        });
     }
 
     public updatePreferences(prefs: Partial<VoicePreferences>): void {
         this.preferences = { ...this.preferences, ...prefs };
-        if (this.recognition && prefs.language) this.recognition.lang = prefs.language;
+        updateVoicePreferences(prefs);
     }
 
-    public getPreferences() { return this.preferences; }
+    public getPreferences(): VoicePreferences {
+        return this.preferences;
+    }
 
     public destroy(): void {
-        this.stop();
+        this.stopSpeaking();
         this.stopListening();
-        this.audioCache.forEach(v => URL.revokeObjectURL(v.url));
+
+        this.audioCache.forEach(url => {
+            if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+        });
         this.audioCache.clear();
+        this.pendingFetches.clear();
     }
 }

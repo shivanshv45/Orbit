@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
-import asyncio
 from services.tts_service import tts_service, precache_common_phrases
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -32,7 +31,7 @@ async def synthesize_speech(request: SynthesizeRequest):
         content=audio_data,
         media_type="audio/wav",
         headers={
-            "Content-Disposition": f'inline; filename="speech.wav"',
+            "Content-Disposition": 'inline; filename="speech.wav"',
             "Cache-Control": "public, max-age=86400"
         }
     )
@@ -59,7 +58,7 @@ async def synthesize_speech_get(
         content=audio_data,
         media_type="audio/wav",
         headers={
-            "Content-Disposition": f'inline; filename="speech.wav"',
+            "Content-Disposition": 'inline; filename="speech.wav"',
             "Cache-Control": "public, max-age=86400"
         }
     )

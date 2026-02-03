@@ -298,12 +298,6 @@ export function usePiperVoiceMode({
         }
     }, []);
 
-    const setContinuousMode = useCallback((enabled: boolean) => {
-        if (voiceEngineRef.current) {
-            voiceEngineRef.current.setContinuousMode(enabled);
-        }
-    }, []);
-
     return {
         isListening,
         isSpeaking,
@@ -311,6 +305,5 @@ export function usePiperVoiceMode({
         stopListening,
         speakText,
         updatePreferences,
-        setContinuousMode,
     };
 }

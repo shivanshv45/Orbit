@@ -2,271 +2,237 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { loadVoicePreferences, updateVoicePreferences } from '@/lib/voice/VoicePreferences';
 import { PiperVoiceEngine } from '@/lib/voice/PiperVoiceEngine';
 
-interface AccessibilityModeContextValue {
-    isAccessibilityModeOn: boolean;
-    toggleAccessibilityMode: () => void;
-    speak: (text: string, interrupt?: boolean) => void;
-    speakMultiple: (texts: string[]) => void;
-    stopSpeaking: () => void;
+interface AccessibilityContextType {
+    isOn: boolean;
     isSpeaking: boolean;
     isListening: boolean;
-    startListening: () => void;
-    stopListening: () => void;
+    toggle: () => void;
+    speak: (text: string) => void;
+    speakAll: (texts: string[]) => void;
+    stop: () => void;
     prefetch: (texts: string[]) => void;
-    setTeachingCommandHandler: (handler: ((transcript: string) => boolean) | null) => void;
+    setCommandHandler: (handler: ((text: string) => boolean) | null) => void;
+    registerBlockSpeaker: (fn: () => void) => void;
     updateSpeed: (rate: number) => void;
-    updatePitch: (pitch: number) => void;
-    getPreferences: () => { rate: number; pitch: number };
+    getSpeed: () => number;
 }
 
-const AccessibilityModeContext = createContext<AccessibilityModeContextValue | null>(null);
+const AccessibilityContext = createContext<AccessibilityContextType | null>(null);
 
 export function useAccessibilityMode() {
-    const context = useContext(AccessibilityModeContext);
-    if (!context) {
-        throw new Error('useAccessibilityMode must be used within AccessibilityModeProvider');
-    }
-    return context;
+    const ctx = useContext(AccessibilityContext);
+    if (!ctx) throw new Error('useAccessibilityMode must be used within provider');
+    return ctx;
 }
 
 export function useAccessibilityModeOptional() {
-    const context = useContext(AccessibilityModeContext);
-    return context || {
-        isAccessibilityModeOn: false,
-        toggleAccessibilityMode: () => { },
-        speak: () => { },
-        speakMultiple: () => { },
-        stopSpeaking: () => { },
-        isSpeaking: false,
-        isListening: false,
-        startListening: () => { },
-        stopListening: () => { },
-        prefetch: () => { },
-        setTeachingCommandHandler: () => { },
-        updateSpeed: () => { },
-        updatePitch: () => { },
-        getPreferences: () => ({ rate: 1, pitch: 1 }),
-    };
+    return useContext(AccessibilityContext);
 }
 
-interface AccessibilityModeProviderProps {
-    children: React.ReactNode;
-}
-
-export function AccessibilityModeProvider({ children }: AccessibilityModeProviderProps) {
-    const [isAccessibilityModeOn, setIsAccessibilityModeOn] = useState(false);
+export function AccessibilityModeProvider({ children }: { children: React.ReactNode }) {
+    const [isOn, setIsOn] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isListening, setIsListening] = useState(false);
-    const voiceEngineRef = useRef<PiperVoiceEngine | null>(null);
-    const teachingHandlerRef = useRef<((transcript: string) => boolean) | null>(null);
-    const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const engineRef = useRef<PiperVoiceEngine | null>(null);
+    const commandHandlerRef = useRef<((text: string) => boolean) | null>(null);
+    const blockSpeakerRef = useRef<() => void>(() => { });
+    const ctrlDownRef = useRef(false);
 
     useEffect(() => {
         const prefs = loadVoicePreferences();
-        if (prefs.visualImpairmentMode === true) {
-            setIsAccessibilityModeOn(true);
+        if (prefs.visualImpairmentMode) {
+            setIsOn(true);
         }
     }, []);
 
-    const resumeWithDelay = useCallback(() => {
-        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+    const processCommand = useCallback((text: string) => {
+        console.log('Processing command:', text);
 
-        resumeTimeoutRef.current = setTimeout(() => {
-            voiceEngineRef.current?.resume();
-        }, 800); // 800ms delay for natural pause
-    }, []);
-
-    useEffect(() => {
-        if (isAccessibilityModeOn && !voiceEngineRef.current) {
-            voiceEngineRef.current = new PiperVoiceEngine({
-                onSpeechStart: () => setIsSpeaking(true),
-                onSpeechEnd: () => setIsSpeaking(false),
-                onListeningChange: (listening) => setIsListening(listening),
-                onRecognitionResult: (transcript, confidence) => {
-                    handleVoiceCommand(transcript, confidence);
-                },
-                onNoSpeechDetected: () => {
-                    // Resume if no speech was detected after PTT release
-                    resumeWithDelay();
-                },
-                onError: (error) => {
-                    console.error('Voice engine error:', error);
-                },
-            });
-
-            setTimeout(() => {
-                voiceEngineRef.current?.speak('Visual impairment mode on. Say help for available commands.');
-            }, 500);
-        }
-
-        if (!isAccessibilityModeOn && voiceEngineRef.current) {
-            voiceEngineRef.current.destroy();
-            voiceEngineRef.current = null;
-            setIsSpeaking(false);
-            setIsListening(false);
-        }
-
-        return () => {
-            if (voiceEngineRef.current) {
-                voiceEngineRef.current.destroy();
-                voiceEngineRef.current = null;
-            }
-            if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-        };
-    }, [isAccessibilityModeOn]);
-
-    const handleVoiceCommand = useCallback((transcript: string, _confidence: number) => {
-        if (teachingHandlerRef.current) {
-            const handled = teachingHandlerRef.current(transcript);
+        if (commandHandlerRef.current) {
+            const handled = commandHandlerRef.current(text);
             if (handled) return;
         }
 
-        const normalized = transcript.toLowerCase().trim();
+        const lower = text.toLowerCase();
 
-        if (normalized.includes('turn off') || normalized.includes('disable') || normalized.includes('exit accessibility')) {
-            voiceEngineRef.current?.speak('Visual impairment mode off.');
+        if (lower.includes('off') || lower.includes('disable') || lower.includes('exit')) {
+            engineRef.current?.speak('Mode off');
             setTimeout(() => {
-                setIsAccessibilityModeOn(false);
+                setIsOn(false);
                 updateVoicePreferences({ visualImpairmentMode: false });
             }, 1500);
             return;
         }
 
-        if (normalized.includes('help') || normalized.includes('commands')) {
-            voiceEngineRef.current?.speak('Available commands: Next, Repeat, Faster, Slower, Go to curriculum.');
+        if (lower.includes('help')) {
+            engineRef.current?.speak('Commands: next, repeat, back, faster, slower, off');
             return;
         }
 
-        if (normalized.includes('go home') || normalized.includes('go to home')) {
-            voiceEngineRef.current?.speak('Going to home page');
+        if (lower.includes('home')) {
+            engineRef.current?.speak('Going home');
             setTimeout(() => { window.location.href = '/'; }, 1500);
             return;
         }
 
-        if (normalized.includes('go to curriculum') || normalized.includes('exit lesson')) {
-            voiceEngineRef.current?.speak('Going to curriculum');
+        if (lower.includes('curriculum')) {
+            engineRef.current?.speak('Going to curriculum');
             setTimeout(() => { window.location.href = '/curriculum'; }, 1500);
             return;
         }
 
-        // If no matches, just resume previous speech after delay
-        resumeWithDelay();
-    }, [resumeWithDelay]);
-
-    const toggleAccessibilityMode = useCallback(() => {
-        setIsAccessibilityModeOn(prev => {
-            const newValue = !prev;
-            updateVoicePreferences({ visualImpairmentMode: newValue });
-            return newValue;
-        });
+        engineRef.current?.speak('Say help for commands');
     }, []);
 
-    const speak = useCallback((text: string, interrupt: boolean = false) => {
-        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-        if (voiceEngineRef.current && isAccessibilityModeOn) {
-            voiceEngineRef.current.speak(text, interrupt);
+    useEffect(() => {
+        if (!isOn) {
+            if (engineRef.current) {
+                engineRef.current.destroy();
+                engineRef.current = null;
+            }
+            setIsSpeaking(false);
+            setIsListening(false);
+            ctrlDownRef.current = false;
+            return;
         }
-    }, [isAccessibilityModeOn]);
 
-    const speakMultiple = useCallback((texts: string[]) => {
-        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-        if (voiceEngineRef.current && isAccessibilityModeOn) {
-            texts.forEach((text, index) => {
-                voiceEngineRef.current?.speak(text, index === 0);
+        if (!engineRef.current) {
+            const engine = new PiperVoiceEngine();
+            engine.setCallbacks(
+                processCommand,
+                setIsListening,
+                setIsSpeaking
+            );
+            engineRef.current = engine;
+
+            engine.requestMic().then(() => {
+                setTimeout(() => {
+                    if (engineRef.current === engine) {
+                        engine.speak('Voice mode on. Hold Control to speak commands.');
+                    }
+                }, 300);
             });
         }
-    }, [isAccessibilityModeOn]);
+    }, [isOn, processCommand]);
 
-    const stopSpeaking = useCallback(() => {
-        voiceEngineRef.current?.stop();
-    }, []);
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.repeat) return;
 
-    const startListening = useCallback(() => {
-        if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-        if (voiceEngineRef.current && isAccessibilityModeOn) {
-            voiceEngineRef.current.pause();
-            voiceEngineRef.current.startListening();
+            if (e.ctrlKey && e.code === 'Space') {
+                e.preventDefault();
+                e.stopPropagation();
+                const next = !isOn;
+                setIsOn(next);
+                updateVoicePreferences({ visualImpairmentMode: next });
+                if (!next && engineRef.current) {
+                    engineRef.current.stopSpeaking();
+                    setTimeout(() => {
+                        engineRef.current?.speak('Mode off');
+                    }, 100);
+                }
+                return;
+            }
+
+            if (e.key === 'Control' && isOn && !ctrlDownRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+                ctrlDownRef.current = true;
+                if (engineRef.current) {
+                    engineRef.current.stopSpeaking();
+                    setTimeout(() => {
+                        engineRef.current?.startListening();
+                    }, 100);
+                }
+            }
+        };
+
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.key === 'Control' && ctrlDownRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+                ctrlDownRef.current = false;
+                engineRef.current?.stopListening();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown, { capture: true });
+        window.addEventListener('keyup', onKeyUp, { capture: true });
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, { capture: true });
+            window.removeEventListener('keyup', onKeyUp, { capture: true });
+        };
+    }, [isOn]);
+
+    const toggle = useCallback(() => {
+        const next = !isOn;
+
+        if (!next && engineRef.current) {
+            engineRef.current.stopSpeaking();
         }
-    }, [isAccessibilityModeOn]);
 
-    const stopListening = useCallback(() => {
-        if (voiceEngineRef.current) {
-            voiceEngineRef.current.stopListening();
-            // Do NOT automatically resume here. 
-            // We rely on onRecognitionResult or onNoSpeechDetected to trigger action or resume.
+        setIsOn(next);
+        updateVoicePreferences({ visualImpairmentMode: next });
+    }, [isOn]);
+
+    const speak = useCallback((text: string) => {
+        if (isOn && engineRef.current) {
+            engineRef.current.speak(text);
+        }
+    }, [isOn]);
+
+    const speakAll = useCallback((texts: string[]) => {
+        if (isOn && engineRef.current) {
+            engineRef.current.speakMultiple(texts);
+        }
+    }, [isOn]);
+
+    const stop = useCallback(() => {
+        if (engineRef.current) {
+            engineRef.current.stopSpeaking();
+            engineRef.current.stopListening();
         }
     }, []);
 
     const prefetch = useCallback((texts: string[]) => {
-        voiceEngineRef.current?.prefetch(texts);
+        if (engineRef.current) {
+            engineRef.current.prefetch(texts);
+        }
     }, []);
 
-    const setTeachingCommandHandler = useCallback((handler: ((transcript: string) => boolean) | null) => {
-        teachingHandlerRef.current = handler;
+    const setCommandHandler = useCallback((handler: ((text: string) => boolean) | null) => {
+        commandHandlerRef.current = handler;
+    }, []);
+
+    const registerBlockSpeaker = useCallback((fn: () => void) => {
+        blockSpeakerRef.current = fn;
     }, []);
 
     const updateSpeed = useCallback((rate: number) => {
-        voiceEngineRef.current?.updatePreferences({ rate });
+        engineRef.current?.updatePreferences({ rate });
     }, []);
 
-    const updatePitch = useCallback((pitch: number) => {
-        voiceEngineRef.current?.updatePreferences({ pitch });
+    const getSpeed = useCallback(() => {
+        return engineRef.current?.getPreferences().rate || 1;
     }, []);
-
-    const getPreferences = useCallback(() => {
-        const prefs = voiceEngineRef.current?.getPreferences();
-        return { rate: prefs?.rate || 1, pitch: prefs?.pitch || 1 };
-    }, []);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.repeat) return;
-
-            if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleAccessibilityMode();
-                return;
-            }
-
-            if (e.key === 'Control' && isAccessibilityModeOn) {
-                e.preventDefault();
-                startListening();
-            }
-        };
-
-        const handleKeyUp = (e: KeyboardEvent) => {
-            if (e.key === 'Control' && isAccessibilityModeOn) {
-                stopListening();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown, { capture: true });
-        window.addEventListener('keyup', handleKeyUp, { capture: true });
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown, { capture: true });
-            window.removeEventListener('keyup', handleKeyUp, { capture: true });
-        };
-    }, [toggleAccessibilityMode, isAccessibilityModeOn, startListening, stopListening]);
 
     return (
-        <AccessibilityModeContext.Provider value={{
-            isAccessibilityModeOn,
-            toggleAccessibilityMode,
-            speak,
-            speakMultiple,
-            stopSpeaking,
+        <AccessibilityContext.Provider value={{
+            isOn,
             isSpeaking,
             isListening,
-            startListening,
-            stopListening,
+            toggle,
+            speak,
+            speakAll,
+            stop,
             prefetch,
-            setTeachingCommandHandler,
+            setCommandHandler,
+            registerBlockSpeaker,
             updateSpeed,
-            updatePitch,
-            getPreferences,
+            getSpeed,
         }}>
             {children}
-        </AccessibilityModeContext.Provider>
+        </AccessibilityContext.Provider>
     );
 }
