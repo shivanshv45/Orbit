@@ -13,7 +13,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import { createOrGetUser } from '@/logic/userSession';
 import { toast } from 'sonner';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 const PinIcon = ({ className }: { className?: string }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -38,14 +39,15 @@ interface CurriculumListModalProps {
 export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProps) {
     const { data, isLoading, error } = useCurriculums();
     const navigate = useNavigate();
-    // const queryClient = useQueryClient(); // Not needed for local pin/archive updates unless deleting
     const queryClient = useQueryClient();
     const { user, isLoaded } = useUser();
     const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+    const accessibility = useAccessibilityModeOptional();
 
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
     const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
     const [showArchived, setShowArchived] = useState(false);
+    const hasAnnouncedRef = useRef(false);
 
     // Load state from localStorage on mount/user change
     useEffect(() => {
@@ -70,6 +72,7 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
     };
 
     const handleSelectCurriculum = (curriculumId: string) => {
+        accessibility?.stop?.();
         navigate(`/curriculum?id=${curriculumId}`);
         onClose();
     };
@@ -113,7 +116,7 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
             await api.deleteCurriculum(curriculumId, uid);
             queryClient.invalidateQueries({ queryKey: ['curriculums', uid] });
 
-            // Also cleanup local state
+
             const newPinned = new Set(pinnedIds);
             newPinned.delete(curriculumId);
             const newArchived = new Set(archivedIds);
@@ -128,7 +131,7 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
         }
     };
 
-    // Filter and Sort
+
     const processedCurriculums = useMemo(() => {
         if (!data?.curriculums) return [];
 
@@ -141,13 +144,107 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
             filtered.sort((a, b) => {
                 const aPinned = pinnedIds.has(a.id);
                 const bPinned = pinnedIds.has(b.id);
-                if (aPinned === bPinned) return 0; // Keep original created_at sort order from DB
+                if (aPinned === bPinned) return 0;
                 return aPinned ? -1 : 1;
             });
         }
 
         return filtered;
     }, [data, pinnedIds, archivedIds, showArchived]);
+
+    // Voice command handler for selecting curriculum by name
+    const handleVoiceCommand = useCallback((text: string): boolean => {
+        const lower = text.toLowerCase();
+        console.log('CurriculumListModal handling:', lower);
+
+        // Close command
+        if (lower.includes('close') || lower.includes('cancel') || lower.includes('exit')) {
+            accessibility?.speak?.('Closing');
+            setTimeout(() => onClose(), 800);
+            return true;
+        }
+
+        // Find matching curriculum by name
+        if (processedCurriculums.length > 0) {
+            // Calculate match score for each curriculum
+            const matches = processedCurriculums.map(c => {
+                const title = c.title.toLowerCase();
+                const words = lower.split(/\s+/);
+                let score = 0;
+
+                // Check for word matches in title
+                for (const word of words) {
+                    if (word.length < 3) continue; // Skip short words
+                    if (title.includes(word)) {
+                        score += word.length;
+                    }
+                }
+
+                // Exact match bonus
+                if (title === lower) score += 100;
+
+                return { curriculum: c, score };
+            }).filter(m => m.score > 0);
+
+            // Sort by score and pick best match
+            matches.sort((a, b) => b.score - a.score);
+
+            if (matches.length > 0 && matches[0].score >= 3) {
+                const selected = matches[0].curriculum;
+                accessibility?.speak?.(`Opening ${selected.title}`);
+                setTimeout(() => handleSelectCurriculum(selected.id), 1200);
+                return true;
+            }
+        }
+
+        // If number is spoken
+        const numMatch = lower.match(/(\d+)|one|two|three|four|five|six|seven|eight|nine|ten/);
+        if (numMatch) {
+            let num = 0;
+            if (numMatch[1]) {
+                num = parseInt(numMatch[1]);
+            } else {
+                const wordNums: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+                num = wordNums[numMatch[0]] || 0;
+            }
+
+            if (num > 0 && num <= processedCurriculums.length) {
+                const selected = processedCurriculums[num - 1];
+                accessibility?.speak?.(`Opening ${selected.title}`);
+                setTimeout(() => handleSelectCurriculum(selected.id), 1200);
+                return true;
+            }
+        }
+
+        return false;
+    }, [processedCurriculums, accessibility, handleSelectCurriculum, onClose]);
+
+    // Set command handler when modal is open in voice mode
+    useEffect(() => {
+        if (isOpen && accessibility?.isOn) {
+            accessibility.setCommandHandler?.(handleVoiceCommand);
+            return () => accessibility.setCommandHandler?.(null);
+        }
+    }, [isOpen, accessibility?.isOn, handleVoiceCommand, accessibility]);
+
+    // Announce courses when modal opens in voice mode
+    useEffect(() => {
+        if (isOpen && accessibility?.isOn && !isLoading && processedCurriculums.length > 0 && !hasAnnouncedRef.current) {
+            hasAnnouncedRef.current = true;
+            const courseNames = processedCurriculums.slice(0, 5).map((c, i) => `${i + 1}, ${c.title}`).join('. ');
+            const message = processedCurriculums.length === 1
+                ? `You have 1 course: ${processedCurriculums[0].title}. Say the course name or number to open it.`
+                : `You have ${processedCurriculums.length} courses. ${courseNames}. Say the course name or number to open it.`;
+
+            setTimeout(() => accessibility.speak?.(message), 500);
+        }
+
+        // Reset when modal closes
+        if (!isOpen) {
+            hasAnnouncedRef.current = false;
+        }
+    }, [isOpen, accessibility?.isOn, isLoading, processedCurriculums, accessibility]);
+
 
     return (
         <AnimatePresence>

@@ -56,8 +56,9 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
 
         const lower = text.toLowerCase();
 
-        if (lower.includes('off') || lower.includes('disable') || lower.includes('exit')) {
-            engineRef.current?.speak('Mode off');
+        // Voice mode control
+        if (lower.includes('off') || lower.includes('disable') || lower.includes('exit voice')) {
+            engineRef.current?.speak('Voice mode off');
             setTimeout(() => {
                 setIsOn(false);
                 updateVoicePreferences({ visualImpairmentMode: false });
@@ -65,24 +66,50 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
             return;
         }
 
+        // Help command
         if (lower.includes('help')) {
-            engineRef.current?.speak('Commands: next, repeat, back, faster, slower, off');
+            engineRef.current?.speak('Commands: next, back, home, curriculum, upload, repeat, faster, slower, off');
             return;
         }
 
-        if (lower.includes('home')) {
+        // Navigation commands - stop speaking first
+        if (lower.includes('home') || lower.includes('go home') || lower.includes('main page')) {
+            engineRef.current?.stopSpeaking();
             engineRef.current?.speak('Going home');
-            setTimeout(() => { window.location.href = '/'; }, 1500);
+            setTimeout(() => { window.location.href = '/'; }, 1200);
             return;
         }
 
-        if (lower.includes('curriculum')) {
+        if (lower.includes('curriculum') || lower.includes('courses') || lower.includes('my courses')) {
+            engineRef.current?.stopSpeaking();
             engineRef.current?.speak('Going to curriculum');
-            setTimeout(() => { window.location.href = '/curriculum'; }, 1500);
+            setTimeout(() => { window.location.href = '/curriculum'; }, 1200);
             return;
         }
 
-        engineRef.current?.speak('Say help for commands');
+        if (lower.includes('upload') || lower.includes('new course') || lower.includes('add course')) {
+            engineRef.current?.stopSpeaking();
+            engineRef.current?.speak('Going to upload');
+            setTimeout(() => { window.location.href = '/upload'; }, 1200);
+            return;
+        }
+
+        if (lower.includes('dashboard')) {
+            engineRef.current?.stopSpeaking();
+            engineRef.current?.speak('Going to dashboard');
+            setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+            return;
+        }
+
+        if (lower.includes('go back') || lower === 'back') {
+            engineRef.current?.stopSpeaking();
+            engineRef.current?.speak('Going back');
+            setTimeout(() => { window.history.back(); }, 1200);
+            return;
+        }
+
+        // If no command matched
+        engineRef.current?.speak('Command not recognized. Say help for available commands.');
     }, []);
 
     useEffect(() => {
@@ -101,7 +128,14 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
             const engine = new PiperVoiceEngine();
             engine.setCallbacks(
                 processCommand,
-                setIsListening,
+                (listening) => {
+                    setIsListening(listening);
+
+                    if (!listening && ctrlDownRef.current && isOn) {
+                        console.log("Restarting listening as Control is still held");
+                        setTimeout(() => engine.startListening(), 10);
+                    }
+                },
                 setIsSpeaking
             );
             engineRef.current = engine;
@@ -111,7 +145,7 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
                     if (engineRef.current === engine) {
                         engine.speak('Voice mode on. Hold Control to speak commands.');
                     }
-                }, 300);
+                }, 500);
             });
         }
     }, [isOn, processCommand]);
@@ -119,6 +153,17 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.repeat) return;
+
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+
+            }
+
+            // Accessibility toggle: Alt + V
+            if (e.altKey && e.code === 'KeyV') {
+                e.preventDefault();
+                toggle();
+                return;
+            }
 
             if (e.ctrlKey && e.code === 'Space') {
                 e.preventDefault();
@@ -141,9 +186,7 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
                 ctrlDownRef.current = true;
                 if (engineRef.current) {
                     engineRef.current.stopSpeaking();
-                    setTimeout(() => {
-                        engineRef.current?.startListening();
-                    }, 100);
+                    engineRef.current.startListening();
                 }
             }
         };
@@ -153,7 +196,12 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
                 e.preventDefault();
                 e.stopPropagation();
                 ctrlDownRef.current = false;
-                engineRef.current?.stopListening();
+                // Wait 500ms for recognition to finish processing
+                setTimeout(() => {
+                    if (!ctrlDownRef.current) {
+                        engineRef.current?.stopListening();
+                    }
+                }, 500);
             }
         };
 

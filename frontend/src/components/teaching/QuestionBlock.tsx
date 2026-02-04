@@ -174,6 +174,7 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
                 <div className="mb-5">
                     <input
                         type="text"
+                        data-fill-input="true"
                         value={fillInAnswer}
                         onChange={(e) => setFillInAnswer(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}

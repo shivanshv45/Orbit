@@ -25,8 +25,14 @@ export class PiperVoiceEngine {
     private isProcessingQueue = false;
     private isSpeaking = false;
     private isListening = false;
+    private stopGeneration = 0;
+    private lastSpeakTime = 0;
+    private activeGeneration = 0;
+    private audioContext: AudioContext | null = null;
+    private audioUnlocked = false;
 
     private recognition: any = null;
+    private hasProcessedResult = false;
 
     private onResult: ((text: string) => void) | null = null;
     private onListeningChange: ((listening: boolean) => void) | null = null;
@@ -36,6 +42,40 @@ export class PiperVoiceEngine {
         this.preferences = validatePreferences(loadVoicePreferences());
         loadManifest();
         this.initRecognition();
+        this.initAudioContext();
+    }
+
+    private initAudioContext(): void {
+        try {
+            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+            const unlockAudio = () => {
+                if (this.audioUnlocked || !this.audioContext) return;
+
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().then(() => {
+                        console.log('🔊 AudioContext resumed');
+                        this.audioUnlocked = true;
+                    });
+                } else {
+                    this.audioUnlocked = true;
+                }
+
+                const buffer = this.audioContext.createBuffer(1, 1, 22050);
+                const source = this.audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(this.audioContext.destination);
+                source.start(0);
+
+                console.log('🔊 Audio unlocked via user interaction');
+            };
+
+            document.addEventListener('click', unlockAudio, { once: false });
+            document.addEventListener('keydown', unlockAudio, { once: false });
+            document.addEventListener('touchstart', unlockAudio, { once: false });
+        } catch (e) {
+            console.warn('AudioContext not available:', e);
+        }
     }
 
     private initRecognition(): void {
@@ -53,37 +93,45 @@ export class PiperVoiceEngine {
             this.recognition.maxAlternatives = 1;
 
             this.recognition.onstart = () => {
-                if (!this.isListening) {
-                    this.isListening = true;
-                    this.onListeningChange?.(true);
-                    console.log('Listening...');
-                }
+                this.isListening = true;
+                this.hasProcessedResult = false;
+                this.onListeningChange?.(true);
+                console.log('🎤 Listening...');
             };
 
             this.recognition.onresult = (e: any) => {
-                const text = e.results[0][0].transcript.trim();
-                console.log('Heard:', text);
-                if (text && this.onResult) {
-                    this.onResult(text);
+                if (this.hasProcessedResult) return;
+
+                const result = e.results[0];
+                if (result) {
+                    const transcript = result[0].transcript.trim();
+                    const confidence = result[0].confidence;
+                    console.log('✅ Heard:', transcript, `(${Math.round(confidence * 100)}%)`);
+
+                    if (transcript && this.onResult) {
+                        this.hasProcessedResult = true;
+                        this.onResult(transcript);
+                    }
                 }
             };
 
             this.recognition.onerror = (e: any) => {
-                if (e.error !== 'aborted' && e.error !== 'no-speech') {
-                    console.log('Recognition error:', e.error);
-                    if (e.error === 'network') {
-                        this.speak('Voice commands require Chrome or Edge browser');
-                    }
+                console.log('❌ Recognition error:', e.error);
+                if (e.error === 'network') {
+                    this.speak('Check internet connection');
+                } else if (e.error === 'not-allowed') {
+                    this.speak('Please allow microphone access');
+                } else if (e.error === 'audio-capture') {
+                    this.speak('No microphone found');
                 }
                 this.isListening = false;
                 this.onListeningChange?.(false);
             };
 
             this.recognition.onend = () => {
-                if (this.isListening) {
-                    this.isListening = false;
-                    this.onListeningChange?.(false);
-                }
+                console.log('🔇 Recognition ended');
+                this.isListening = false;
+                this.onListeningChange?.(false);
             };
 
         } catch (e) {
@@ -139,8 +187,6 @@ export class PiperVoiceEngine {
             this.recognition.stop();
         } catch { }
 
-        this.isListening = false;
-        this.onListeningChange?.(false);
     }
 
     public stopSpeaking(): void {
@@ -148,18 +194,16 @@ export class PiperVoiceEngine {
         this.speechQueue = [];
 
         if (this.currentAudio) {
-            try {
-                this.currentAudio.pause();
-                this.currentAudio.currentTime = 0;
-                this.currentAudio.src = '';
-                this.currentAudio.load();
-            } catch (e) {
-            }
-            try {
-                this.currentAudio.remove?.();
-            } catch (e) {
-            }
+            const audioToStop = this.currentAudio;
             this.currentAudio = null;
+            try {
+                audioToStop.pause();
+                audioToStop.onended = null;
+                audioToStop.onerror = null;
+                audioToStop.currentTime = 0;
+                audioToStop.src = '';
+            } catch (e) {
+            }
         }
 
         this.isSpeaking = false;
@@ -169,30 +213,87 @@ export class PiperVoiceEngine {
     public speak(text: string, interrupt = true): void {
         if (!text?.trim()) return;
 
+        const now = Date.now();
+        const timeSinceLastSpeak = now - this.lastSpeakTime;
+        this.lastSpeakTime = now;
+
+        console.log('🔊 speak() called:', text.substring(0, 50), 'interrupt:', interrupt);
+
+        const gen = interrupt ? ++this.stopGeneration : this.stopGeneration;
+
         if (interrupt) {
-            this.stopSpeaking();
+            if (this.currentAudio) {
+                try {
+                    this.currentAudio.pause();
+                    this.currentAudio.onended = null;
+                    this.currentAudio.onerror = null;
+                } catch (e) { }
+                this.currentAudio = null;
+            }
+            this.speechQueue = [];
         }
 
         this.speechQueue.push(text);
 
-        if (!this.isProcessingQueue) {
-            this.processQueue();
-        }
+        const delay = timeSinceLastSpeak < 100 ? 150 : 10;
+
+        setTimeout(() => {
+            if (this.stopGeneration === gen) {
+                this.activeGeneration = gen;
+                this.isProcessingQueue = false;
+                this.processQueue();
+            } else {
+                console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
+            }
+        }, delay);
     }
 
     public speakMultiple(texts: string[]): void {
         const filtered = texts.filter(t => t?.trim());
         if (filtered.length === 0) return;
 
-        this.stopSpeaking();
+        const now = Date.now();
+        const timeSinceLastSpeak = now - this.lastSpeakTime;
+        this.lastSpeakTime = now;
+
+        console.log('🔊 speakMultiple() called:', filtered.length, 'items, timeSince:', timeSinceLastSpeak);
+        console.log('🔊 speakMultiple caller:', new Error().stack?.split('\n').slice(2, 5).join(' <- '));
+
+        const gen = ++this.stopGeneration;
+
+        if (this.currentAudio) {
+            try {
+                this.currentAudio.pause();
+                this.currentAudio.onended = null;
+                this.currentAudio.onerror = null;
+            } catch (e) { }
+            this.currentAudio = null;
+        }
+
         this.speechQueue = [...filtered];
-        this.processQueue();
+
+        const delay = timeSinceLastSpeak < 100 ? 150 : 10;
+
+        setTimeout(() => {
+            if (this.stopGeneration === gen) {
+                this.activeGeneration = gen;
+                this.isProcessingQueue = false;
+                this.processQueue();
+            } else {
+                console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
+            }
+        }, delay);
     }
 
     private async processQueue(): Promise<void> {
         if (this.isProcessingQueue) return;
 
-        if (this.speechQueue.length === 0) {
+        const itemsToPlay = [...this.speechQueue];
+        this.speechQueue = [];
+
+        console.log('🔊 processQueue() starting, items:', itemsToPlay.length);
+
+        if (itemsToPlay.length === 0) {
             this.isSpeaking = false;
             this.onSpeakingChange?.(false);
             return;
@@ -202,45 +303,112 @@ export class PiperVoiceEngine {
         this.isSpeaking = true;
         this.onSpeakingChange?.(true);
 
-        while (this.speechQueue.length > 0 && this.isProcessingQueue) {
-            if (!this.isProcessingQueue) break;
+        const gen = this.activeGeneration;
 
-            const text = this.speechQueue.shift()!;
-            await this.playText(text);
+        try {
+            for (const text of itemsToPlay) {
+                if (this.stopGeneration !== gen) {
+                    console.log('🔊 queue interrupted by new speak');
+                    break;
+                }
+                console.log('🔊 playing:', text.substring(0, 40));
+                await this.playText(text);
+            }
+            console.log('🔊 queue finished, gen match:', this.stopGeneration === gen);
+        } catch (e) {
+            console.error('Error processing speech queue:', e);
+        } finally {
+            this.isProcessingQueue = false;
+            this.isSpeaking = false;
+            this.onSpeakingChange?.(false);
         }
-
-        this.isProcessingQueue = false;
-        this.isSpeaking = false;
-        this.onSpeakingChange?.(false);
     }
 
     private async playText(text: string): Promise<void> {
-        if (!this.isProcessingQueue) return;
+        const gen = this.activeGeneration;
+        console.log('🔊 playText() called:', text.substring(0, 40), 'gen:', gen);
 
-        const audioUrl = await this.getAudioUrl(text);
-        if (!audioUrl || !this.isProcessingQueue) return;
+        if (this.stopGeneration !== gen) {
+            console.log('🔊 playText() cancelled: gen mismatch');
+            return;
+        }
 
-        return new Promise<void>((resolve) => {
-            if (!this.isProcessingQueue) {
-                resolve();
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            try {
+                await this.audioContext.resume();
+            } catch (e) { }
+        }
+
+        try {
+            const audioUrl = await this.getAudioUrl(text);
+            if (!audioUrl) {
+                console.log('🔊 playText aborted: no url');
+                return;
+            }
+
+            if (this.stopGeneration !== gen) {
+                console.log('🔊 playText aborted: gen changed after fetch');
                 return;
             }
 
             const audio = new Audio(audioUrl);
-            this.currentAudio = audio;
+            const rate = this.preferences?.rate || 1;
+            audio.playbackRate = Math.max(0.1, Math.min(rate, 4.0));
 
-            const cleanup = () => {
-                if (this.currentAudio === audio) {
-                    this.currentAudio = null;
+            try {
+                console.log('🔊 starting audio.play()');
+                await audio.play();
+
+                if (this.stopGeneration !== gen) {
+                    console.log('🔊 gen changed after play started, stopping');
+                    audio.pause();
+                    return;
                 }
-                resolve();
-            };
 
-            audio.onended = cleanup;
-            audio.onerror = cleanup;
+                this.currentAudio = audio;
+                console.log('🔊 audio playing, duration:', audio.duration);
+            } catch (e: any) {
+                console.log('🔊 play() error:', e.name, e.message);
+                return;
+            }
 
-            audio.play().catch(cleanup);
-        });
+            await new Promise<void>((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (this.stopGeneration !== gen) {
+                        console.log('🔊 audio cancelled by new speak');
+                        clearInterval(checkInterval);
+                        audio.pause();
+                        if (this.currentAudio === audio) {
+                            this.currentAudio = null;
+                        }
+                        resolve();
+                        return;
+                    }
+
+                    if (audio.ended) {
+                        console.log('🔊 audio finished (interval check)');
+                        clearInterval(checkInterval);
+                        if (this.currentAudio === audio) {
+                            this.currentAudio = null;
+                        }
+                        resolve();
+                    }
+                }, 100);
+
+                audio.onended = () => {
+                    console.log('🔊 audio onended fired');
+                    clearInterval(checkInterval);
+                    if (this.currentAudio === audio) {
+                        this.currentAudio = null;
+                    }
+                    resolve();
+                };
+            });
+
+            console.log('🔊 playText complete for:', text.substring(0, 20));
+        } catch (e) {
+            console.error('Error in playText:', e);
+        }
     }
 
     private async getAudioUrl(text: string): Promise<string | null> {

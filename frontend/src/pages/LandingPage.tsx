@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
@@ -9,6 +9,7 @@ import { SolarSystemBackground } from '@/components/landing/SolarSystemBackgroun
 import { FutureOfStudySection } from '@/components/landing/FutureOfStudySection';
 import { AuthButton } from '@/components/auth/AuthButton';
 import { OrbitLogo } from '@/components/brand/OrbitLogo';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 const BASE_SCALE = 0.3;
 
@@ -50,9 +51,39 @@ export default function LandingPage() {
   const [showAnimation, setShowAnimation] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [animationStep, setAnimationStep] = useState(0);
+  const accessibility = useAccessibilityModeOptional();
 
   // Prefetch curriculums on page load for instant modal display
   useCurriculums();
+
+  // Voice command handler for landing page
+  const handleVoiceCommand = useCallback((text: string): boolean => {
+    const lower = text.toLowerCase();
+
+    // Open curriculum modal
+    if (lower.includes('curriculum') || lower.includes('courses') || lower.includes('my courses')) {
+      accessibility?.speak?.('Opening your courses');
+      setTimeout(() => setShowCurriculumModal(true), 800);
+      return true;
+    }
+
+    // Open uploader
+    if (lower.includes('upload') || lower.includes('new') || lower.includes('start') || lower.includes('learn')) {
+      accessibility?.speak?.('Opening upload');
+      setTimeout(() => setShowUploader(true), 800);
+      return true;
+    }
+
+    return false;
+  }, [accessibility]);
+
+  // Set command handler when on landing page in voice mode
+  useEffect(() => {
+    if (accessibility?.isOn && !showCurriculumModal && showContent) {
+      accessibility.setCommandHandler?.(handleVoiceCommand);
+      return () => accessibility.setCommandHandler?.(null);
+    }
+  }, [accessibility?.isOn, showCurriculumModal, showContent, handleVoiceCommand, accessibility]);
 
   useEffect(() => {
     const styleInterval = setInterval(() => {

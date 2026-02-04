@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronRight, ChevronLeft, CheckCircle, XCircle, BookOpen, Trophy, Target, Sparkles, Calculator } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatFormula } from '@/lib/formatFormula';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 interface RevisionNote {
     topic: string;
@@ -89,6 +90,11 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
     const [questionStates, setQuestionStates] = useState<Map<string, QuestionState>>(new Map());
     const [fillInAnswer, setFillInAnswer] = useState('');
     const [score, setScore] = useState({ correct: 0, total: 0 });
+
+    const accessibility = useAccessibilityModeOptional();
+    const lastSpokenKeyRef = useRef('');
+    const speakNoteRef = useRef<() => void>(() => { });
+    const speakQuestionRef = useRef<() => void>(() => { });
 
     const loadRevisionContent = useCallback(async () => {
         const cacheKey = `revision_${userId}_${curriculumId}_${milestone}`;
@@ -201,18 +207,31 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                 total: prev.total + 1
             }));
         }
+
+        if (accessibility?.isOn) {
+            if (shouldShowAnswer) {
+                const correctAnswer = question.options?.[question.correctIndex || 0] || '';
+                const feedback = isCorrect
+                    ? `Correct! ${question.explanation}. Say next to continue.`
+                    : `Incorrect. The correct answer was ${correctAnswer}. ${question.explanation}. Say next to continue.`;
+                accessibility.speak(feedback);
+            } else {
+                accessibility.speak('Not quite. You have one more try.');
+            }
+        }
     };
 
-    const handleFillInSubmit = (questionId: string) => {
+    const handleFillInSubmit = (questionId: string, voiceAnswer?: string) => {
         const question = questions.find(q => q.id === questionId);
-        if (!question || !fillInAnswer.trim()) return;
+        const answer = voiceAnswer || fillInAnswer;
+        if (!question || !answer.trim()) return;
 
         const state = questionStates.get(questionId);
         if (!state || state.showAnswer) return;
 
         const accepted = question.acceptedAnswers || [question.correctAnswer || ''];
         const isCorrect = accepted.some(a =>
-            a.toLowerCase().trim() === fillInAnswer.toLowerCase().trim()
+            a.toLowerCase().trim() === answer.toLowerCase().trim()
         );
         const newAttempts = state.attempts + 1;
         const shouldShowAnswer = isCorrect || newAttempts >= 2;
@@ -221,7 +240,7 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
             answered: true,
             attempts: newAttempts,
             correct: isCorrect,
-            selectedAnswer: fillInAnswer,
+            selectedAnswer: answer,
             showAnswer: shouldShowAnswer
         })));
 
@@ -230,6 +249,17 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                 correct: prev.correct + (isCorrect ? 1 : 0),
                 total: prev.total + 1
             }));
+        }
+
+        if (accessibility?.isOn) {
+            if (shouldShowAnswer) {
+                const feedback = isCorrect
+                    ? `Correct! ${question.explanation}. Say next to continue.`
+                    : `Incorrect. The correct answer was ${question.correctAnswer}. ${question.explanation}. Say next to continue.`;
+                accessibility.speak(feedback);
+            } else {
+                accessibility.speak('Not quite. You have one more try.');
+            }
         }
 
         setFillInAnswer('');
@@ -259,12 +289,223 @@ export function RevisionModal({ isOpen, onClose, userId, curriculumId, milestone
                 correctAnswers: score.correct
             });
 
-            // Clear cache on successful completion
             const cacheKey = `revision_${userId}_${curriculumId}_${milestone}`;
             localStorage.removeItem(cacheKey);
         }
+        accessibility?.stop?.();
         onClose();
     };
+
+    const speakCurrentNote = useCallback(() => {
+        if (!accessibility?.isOn || !notes[currentNoteIndex]) return;
+
+        const note = notes[currentNoteIndex];
+        const texts: string[] = [];
+
+        texts.push(`Note ${currentNoteIndex + 1} of ${notes.length}. Topic: ${note.topic}`);
+        texts.push(note.summary);
+
+        if (note.keyPoints.length > 0) {
+            texts.push(`Key points:`);
+            note.keyPoints.forEach((point, i) => {
+                texts.push(`${i + 1}. ${point}`);
+            });
+        }
+
+        if (note.formulas && note.formulas.length > 0) {
+            texts.push(`Formulas to remember:`);
+            note.formulas.forEach(f => texts.push(f));
+        }
+
+        if (currentNoteIndex < notes.length - 1) {
+            texts.push(`Say next for the next note, or previous to go back.`);
+        } else {
+            texts.push(`This is the last note. Say start test to begin the test.`);
+        }
+
+        accessibility.speakAll(texts);
+    }, [accessibility, notes, currentNoteIndex]);
+
+    const speakCurrentQuestion = useCallback(() => {
+        if (!accessibility?.isOn || !questions[currentQuestionIndex]) return;
+
+        const q = questions[currentQuestionIndex];
+        const state = questionStates.get(q.id);
+        const texts: string[] = [];
+
+        texts.push(`Question ${currentQuestionIndex + 1} of ${questions.length}. Difficulty: ${q.difficulty}`);
+        texts.push(q.question);
+
+        if (q.questionType === 'mcq' && q.options) {
+            texts.push(`Your options are:`);
+            q.options.forEach((opt, i) => {
+                const letter = String.fromCharCode(65 + i);
+                texts.push(`${letter}: ${opt}`);
+            });
+
+            if (!state?.showAnswer) {
+                texts.push(`Say the letter of your answer, like A, B, C, or D.`);
+            }
+        } else if (q.questionType === 'fill_in_blank') {
+            if (!state?.showAnswer) {
+                texts.push(`Speak your answer when ready.`);
+            }
+        }
+
+        if (state?.showAnswer) {
+            texts.push(state.correct ? `Correct!` : `Incorrect. The correct answer was ${q.correctAnswer || q.options?.[q.correctIndex || 0]}`);
+            texts.push(q.explanation);
+            texts.push(`Say next to continue.`);
+        }
+
+        accessibility.speakAll(texts);
+    }, [accessibility, questions, currentQuestionIndex, questionStates]);
+
+    useEffect(() => {
+        speakNoteRef.current = speakCurrentNote;
+    }, [speakCurrentNote]);
+
+    useEffect(() => {
+        speakQuestionRef.current = speakCurrentQuestion;
+    }, [speakCurrentQuestion]);
+
+    useEffect(() => {
+        if (!accessibility?.isOn || !isOpen) return;
+
+        if (phase === 'notes' && notes.length > 0) {
+            const key = `note-${currentNoteIndex}`;
+            if (lastSpokenKeyRef.current === key) return;
+            lastSpokenKeyRef.current = key;
+
+            const timer = setTimeout(() => speakNoteRef.current(), 800);
+            return () => clearTimeout(timer);
+        }
+    }, [accessibility?.isOn, isOpen, phase, currentNoteIndex, notes.length]);
+
+    useEffect(() => {
+        if (!accessibility?.isOn || !isOpen) return;
+
+        if (phase === 'test' && questions.length > 0) {
+            const key = `question-${currentQuestionIndex}`;
+            if (lastSpokenKeyRef.current === key) return;
+            lastSpokenKeyRef.current = key;
+
+            const timer = setTimeout(() => speakQuestionRef.current(), 800);
+            return () => clearTimeout(timer);
+        }
+    }, [accessibility?.isOn, isOpen, phase, currentQuestionIndex, questions.length]);
+
+    useEffect(() => {
+        if (!accessibility?.isOn || !isOpen) return;
+
+        if (phase === 'results') {
+            const percent = questions.length > 0 ? Math.round((score.correct / questions.length) * 100) : 0;
+            accessibility.speak(`Test complete! You scored ${percent}%. ${score.correct} out of ${questions.length} correct. Say close to return.`);
+        }
+    }, [accessibility, isOpen, phase, score, questions.length]);
+
+    useEffect(() => {
+        if (!accessibility?.isOn || !isOpen) return;
+
+        const handleCommand = (text: string): boolean => {
+            const lower = text.toLowerCase();
+
+            if (phase === 'notes') {
+                if (lower.includes('next')) {
+                    if (currentNoteIndex < notes.length - 1) {
+                        accessibility.stop?.();
+                        lastSpokenKeyRef.current = '';
+                        setCurrentNoteIndex(prev => prev + 1);
+                    } else {
+                        accessibility.speak('This is the last note. Say start test to begin.');
+                    }
+                    return true;
+                }
+
+                if (lower.includes('previous') || lower.includes('back')) {
+                    if (currentNoteIndex > 0) {
+                        accessibility.stop?.();
+                        lastSpokenKeyRef.current = '';
+                        setCurrentNoteIndex(prev => prev - 1);
+                    } else {
+                        accessibility.speak('This is the first note.');
+                    }
+                    return true;
+                }
+
+                if (lower.includes('start test') || lower.includes('begin test') || lower.includes('take test')) {
+                    accessibility.speak('Starting the test.');
+                    lastSpokenKeyRef.current = '';
+                    handleFinishNotes();
+                    return true;
+                }
+
+                if (lower.includes('repeat')) {
+                    speakNoteRef.current();
+                    return true;
+                }
+            }
+
+            if (phase === 'test') {
+                const currentQ = questions[currentQuestionIndex];
+                const state = questionStates.get(currentQ?.id);
+
+                if (currentQ?.questionType === 'mcq' && !state?.showAnswer) {
+                    const letterMatch = lower.match(/\b([a-d])\b/);
+                    if (letterMatch) {
+                        const index = letterMatch[1].charCodeAt(0) - 97;
+                        if (index >= 0 && index < (currentQ.options?.length || 0)) {
+                            handleMCQAnswer(currentQ.id, index);
+                            return true;
+                        }
+                    }
+                }
+
+                if (currentQ?.questionType === 'fill_in_blank' && !state?.showAnswer) {
+                    const answerMatch = text.match(/(?:answer|my answer is|it's|its)\s+(.+)/i);
+                    if (answerMatch) {
+                        handleFillInSubmit(currentQ.id, answerMatch[1].trim());
+                        return true;
+                    }
+
+                    if (!lower.includes('next') && !lower.includes('repeat') && !lower.includes('skip') && text.trim().length > 0) {
+                        handleFillInSubmit(currentQ.id, text.trim());
+                        return true;
+                    }
+                }
+
+                if (lower.includes('next') && state?.showAnswer) {
+                    accessibility.stop?.();
+                    lastSpokenKeyRef.current = '';
+                    handleNextQuestion();
+                    return true;
+                }
+
+                if (lower.includes('skip') && !state?.showAnswer) {
+                    accessibility.speak('Skipping this question.');
+                    handleFillInSubmit(currentQ.id, '__skip__');
+                    return true;
+                }
+
+                if (lower.includes('repeat')) {
+                    speakQuestionRef.current();
+                    return true;
+                }
+            }
+
+            if (phase === 'results') {
+                if (lower.includes('close') || lower.includes('done') || lower.includes('finish')) {
+                    handleClose();
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        accessibility.setCommandHandler(handleCommand);
+        return () => accessibility.setCommandHandler(null);
+    }, [accessibility, isOpen, phase, currentNoteIndex, currentQuestionIndex, notes.length, questions, questionStates]);
 
     if (!isOpen) return null;
 

@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Module, Subtopic } from '@/types/curriculum';
 import { useUser } from '@clerk/clerk-react';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 export default function LearnPage() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export default function LearnPage() {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const { user, isLoaded } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+  const accessibility = useAccessibilityModeOptional();
 
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -93,6 +95,12 @@ export default function LearnPage() {
 
   const streak = calculateStreak();
 
+  // Stop voice when leaving the page
+  useEffect(() => {
+    return () => {
+      accessibility?.stop?.();
+    };
+  }, [accessibility]);
 
   useEffect(() => {
     if (subtopicId) {
@@ -157,6 +165,7 @@ export default function LearnPage() {
   };
 
   const handleBack = () => {
+    accessibility?.stop?.();
     navigate(curriculumId ? `/curriculum?id=${curriculumId}` : '/curriculum');
   };
 

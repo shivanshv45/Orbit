@@ -10,6 +10,7 @@ import { createOrGetUser } from '@/logic/userSession';
 import { useUser } from '@clerk/clerk-react';
 import type { Module, Subtopic } from '@/types/curriculum';
 import { OrbitLogo } from '@/components/brand/OrbitLogo';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 export default function CurriculumPage() {
   const navigate = useNavigate();
@@ -18,10 +19,23 @@ export default function CurriculumPage() {
   const { data, isLoading, error } = useCurriculum(curriculumId);
   const { user, isLoaded } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+  const accessibility = useAccessibilityModeOptional();
+
+  const modules: Module[] = data?.modules || [];
+  const allSubtopics = modules.flatMap((m: Module) => m.subtopics);
+  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
+  const isFullyComplete = allSubtopics.length > 0 && completedSubtopics.length === allSubtopics.length;
+  const completionPercentage = allSubtopics.length > 0
+    ? Math.round((completedSubtopics.length / allSubtopics.length) * 100)
+    : 0;
+  const firstAvailableSubtopic: Subtopic | undefined = modules
+    .flatMap((m: Module) => m.subtopics)
+    .find((s: Subtopic) => s.status !== 'completed');
 
   const [revisionModalOpen, setRevisionModalOpen] = useState(false);
   const [revisionMilestone, setRevisionMilestone] = useState<number | null>(null);
   const [milestoneReady, setMilestoneReady] = useState(false);
+  const [hasAnnounced, setHasAnnounced] = useState(false);
 
   useEffect(() => {
     if (data?.curriculum_id && uid) {
@@ -30,7 +44,6 @@ export default function CurriculumPage() {
           setRevisionMilestone(result.milestone);
           setMilestoneReady(true);
 
-          // Check for active cached session to resume
           const cacheKey = `revision_${uid}_${data.curriculum_id}_${result.milestone}`;
           if (localStorage.getItem(cacheKey)) {
             setRevisionModalOpen(true);
@@ -40,7 +53,14 @@ export default function CurriculumPage() {
     }
   }, [data?.curriculum_id, uid]);
 
+  useEffect(() => {
+    return () => {
+      accessibility?.stop?.();
+    };
+  }, [accessibility]);
+
   const handleStartLesson = (subtopicId: string) => {
+    accessibility?.stop?.();
     if (data?.curriculum_id) {
       navigate(`/learn/${subtopicId}?id=${data.curriculum_id}`);
     } else {
@@ -51,6 +71,75 @@ export default function CurriculumPage() {
   const handleOpenRevision = () => {
     setRevisionModalOpen(true);
   };
+
+
+  // Auto-announce status when page loads in voice mode
+  useEffect(() => {
+    if (accessibility?.isOn && !isLoading && data && !hasAnnounced) {
+      setHasAnnounced(true);
+      const percent = completionPercentage;
+      const title = data.title || 'your curriculum';
+      let message = `Welcome to ${title}. You are ${percent}% complete.`;
+
+      if (milestoneReady && revisionMilestone) {
+        message += ` You have reached a ${revisionMilestone}% milestone! Say 'start revision' to take the test.`;
+      } else if (firstAvailableSubtopic) {
+        message += " Say 'start studying' to continue.";
+      }
+
+      accessibility.speak(message);
+    }
+  }, [accessibility?.isOn, isLoading, data, hasAnnounced, completionPercentage, milestoneReady, revisionMilestone, firstAvailableSubtopic, accessibility]);
+
+  // Command handler
+  useEffect(() => {
+    if (!accessibility?.isOn) return;
+
+    const handleCommand = (text: string) => {
+      const lower = text.toLowerCase();
+
+      if ((lower.includes('start') && lower.includes('stud')) ||
+        lower.includes('begin') ||
+        (lower.includes('continue') && !lower.includes('revision'))) {
+        if (firstAvailableSubtopic) {
+          accessibility.speak('Starting lesson');
+          handleStartLesson(firstAvailableSubtopic.id);
+          return true;
+        } else {
+          accessibility.speak('All lessons completed. You can start revision if available.');
+          return true;
+        }
+      }
+
+      if (lower.includes('revision') || lower.includes('test') || lower.includes('review') || lower.includes('quiz')) {
+        if (milestoneReady && revisionMilestone) {
+          accessibility.speak(`Starting ${revisionMilestone}% revision`);
+          handleOpenRevision();
+          return true;
+        } else {
+          accessibility.speak('No revision available yet. Complete more lessons first.');
+          return true;
+        }
+      }
+
+      if (lower.includes('home') || lower.includes('back')) {
+        accessibility.speak('Going back');
+        navigate('/');
+        return true;
+      }
+
+      if (lower.includes('progress') || lower.includes('status')) {
+        const message = `You are ${completionPercentage}% complete.`;
+        accessibility.speak(message);
+        return true;
+      }
+
+      return false;
+    };
+
+    accessibility.setCommandHandler(handleCommand);
+    return () => accessibility.setCommandHandler(null);
+  }, [accessibility, data, firstAvailableSubtopic, milestoneReady, revisionMilestone, completionPercentage, navigate]);
 
   if (isLoading) {
     return (
@@ -79,18 +168,6 @@ export default function CurriculumPage() {
       </div>
     );
   }
-
-  const modules: Module[] = data?.modules || [];
-  const firstAvailableSubtopic: Subtopic | undefined = modules
-    .flatMap((m: Module) => m.subtopics)
-    .find((s: Subtopic) => s.status !== 'completed');
-
-  const allSubtopics = modules.flatMap((m: Module) => m.subtopics);
-  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
-  const isFullyComplete = allSubtopics.length > 0 && completedSubtopics.length === allSubtopics.length;
-  const completionPercentage = allSubtopics.length > 0
-    ? Math.round((completedSubtopics.length / allSubtopics.length) * 100)
-    : 0;
 
   return (
     <div className="min-h-screen bg-background">

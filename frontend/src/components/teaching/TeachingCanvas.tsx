@@ -55,6 +55,7 @@ export function TeachingCanvas({
 
   const converterRef = useRef(new VoiceContentConverter('normal'));
   const lastSpokenRef = useRef('');
+  const speakCurrentBlockRef = useRef<() => void>(() => { });
 
   useEffect(() => {
     setCurrentChunkIndex(0);
@@ -65,7 +66,7 @@ export function TeachingCanvas({
     if (isOn) {
       stop();
     }
-  }, [subtopicId, isOn, stop]);
+  }, [subtopicId]);
 
   const visibleBlocks = blocks.slice(0, currentChunkIndex + 1);
   const hasMoreChunks = currentChunkIndex < blocks.length - 1;
@@ -78,7 +79,9 @@ export function TeachingCanvas({
 
     const scripts = converterRef.current.convertBlock(blocks[currentChunkIndex], currentChunkIndex, blocks.length);
     const texts = scripts.map(s => s.text);
-    speakAll(texts);
+    if (texts.length > 0) {
+      speakAll(texts);
+    }
 
     const nextIdx = currentChunkIndex + 1;
     if (nextIdx < blocks.length) {
@@ -88,11 +91,15 @@ export function TeachingCanvas({
   }, [isOn, blocks, currentChunkIndex, speakAll, prefetch]);
 
   useEffect(() => {
-    registerBlockSpeaker(speakCurrentBlock);
-  }, [registerBlockSpeaker, speakCurrentBlock]);
+    speakCurrentBlockRef.current = speakCurrentBlock;
+  }, [speakCurrentBlock]);
 
   useEffect(() => {
-    if (!isOn) {
+    registerBlockSpeaker(() => speakCurrentBlockRef.current());
+  }, [registerBlockSpeaker]);
+
+  useEffect(() => {
+    if (!isOn || !subtopicId || blocks.length === 0) {
       lastSpokenRef.current = '';
       return;
     }
@@ -102,13 +109,13 @@ export function TeachingCanvas({
     lastSpokenRef.current = key;
 
     const timer = setTimeout(() => {
-      if (lastSpokenRef.current === key && isOn && subtopicId) {
-        speakCurrentBlock();
+      if (lastSpokenRef.current === key && isOn && subtopicId && blocks.length > 0) {
+        speakCurrentBlockRef.current();
       }
-    }, 800);
+    }, 1000);
 
     return () => clearTimeout(timer);
-  }, [isOn, subtopicId, currentChunkIndex, speakCurrentBlock]);
+  }, [isOn, subtopicId, currentChunkIndex, blocks.length]);
 
   const handleContinue = useCallback(async () => {
     if (currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]) return;
@@ -205,24 +212,93 @@ export function TeachingCanvas({
       return true;
     }
 
-    const optMatch = lower.match(/\b([abcd])\b/);
-    if (optMatch && currentBlock?.type === 'question') {
-      const opt = optMatch[1].toUpperCase();
-      speak(`Selecting option ${opt}`);
-      setTimeout(() => {
-        const btn = document.querySelector(`button[data-option="${opt}"]`) as HTMLButtonElement;
-        if (btn) btn.click();
-      }, 800);
-      return true;
+    // Support for MCQ answer selection: letters, numbers, ordinals
+    if (currentBlock?.type === 'question') {
+      let option: string | null = null;
+
+      // Match letter options: a, b, c, d
+      const letterMatch = lower.match(/\b([abcd])\b/);
+      if (letterMatch) {
+        option = letterMatch[1].toUpperCase();
+      }
+
+      // Match number options: 1, 2, 3, 4 or one, two, three, four
+      if (!option) {
+        if (lower.includes('1') || lower.includes('one') || lower.includes('first')) option = 'A';
+        else if (lower.includes('2') || lower.includes('two') || lower.includes('second')) option = 'B';
+        else if (lower.includes('3') || lower.includes('three') || lower.includes('third')) option = 'C';
+        else if (lower.includes('4') || lower.includes('four') || lower.includes('fourth')) option = 'D';
+      }
+
+      if (option) {
+        speak(`Selecting option ${option}`);
+        setTimeout(() => {
+          const btn = document.querySelector(`button[data-option="${option}"]`) as HTMLButtonElement;
+          if (btn) btn.click();
+        }, 800);
+        return true;
+      }
     }
 
-    if ((lower.includes('submit') || lower.includes('check')) && currentBlock?.type === 'question') {
+    if ((lower.includes('submit') || lower.includes('check') || lower.includes('confirm') || lower.includes('enter')) && currentBlock?.type === 'question') {
       speak('Submitting answer');
       setTimeout(() => {
         const btn = document.querySelector('button[data-submit-btn="true"]') as HTMLButtonElement;
         if (btn) btn.click();
       }, 800);
       return true;
+    }
+
+    // Try again after wrong answer
+    if ((lower.includes('try again') || lower.includes('retry')) && currentBlock?.type === 'question') {
+      speak('Trying again');
+      setTimeout(() => {
+        const tryAgainBtn = document.querySelector('button:not([data-submit-btn])') as HTMLButtonElement;
+        if (tryAgainBtn && tryAgainBtn.textContent?.includes('Try Again')) {
+          tryAgainBtn.click();
+        }
+      }, 500);
+      return true;
+    }
+
+    // Fill-in-the-blank: type the spoken answer
+    // Trigger with "answer is [something]" or "type [something]" or "fill [something]"
+    if (currentBlock?.type === 'question') {
+      const questionData = currentBlock as any;
+      if (questionData.questionType === 'fill_in_blank') {
+        let answer = '';
+
+        // Extract answer from various patterns
+        const answerMatch = lower.match(/(?:answer is|answer|type|fill|write|put|enter|say)\s+(.+)/i);
+        if (answerMatch) {
+          answer = answerMatch[1].trim();
+        } else {
+          // If no pattern matched, use the whole text as the answer
+          // But exclude common commands
+          const excluded = ['next', 'previous', 'back', 'continue', 'repeat', 'submit', 'check', 'confirm', 'faster', 'slower', 'help'];
+          if (!excluded.some(cmd => lower.includes(cmd))) {
+            answer = text.trim();
+          }
+        }
+
+        if (answer) {
+          speak(`Typing ${answer}`);
+          setTimeout(() => {
+            const input = document.querySelector('input[data-fill-input="true"]') as HTMLInputElement;
+            if (input) {
+              // Simulate React onChange event
+              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+              if (nativeInputValueSetter) {
+                nativeInputValueSetter.call(input, answer);
+                const event = new Event('input', { bubbles: true });
+                input.dispatchEvent(event);
+              }
+              input.focus();
+            }
+          }, 800);
+          return true;
+        }
+      }
     }
 
     return false;
