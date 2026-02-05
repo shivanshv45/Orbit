@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
-import '@tensorflow/tfjs-core';
-import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
 
