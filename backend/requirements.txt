@@ -1,6 +1,6 @@
 fastapi==0.127.1
 unstructured-client~=0.42.6
-piper-tts
+
 fastapi
 uvicorn~=0.40.0
 python-multipart~=0.0.21
@@ -39,7 +39,6 @@ pydantic~=2.12.5
 websockets~=15.0.1
 pydantic_core~=2.41.5
 MarkupSafe~=3.0.3
-backend~=0.2.4.1
 starlette~=0.50.0
 email-validator~=2.3.0
 rignore~=0.7.6
@@ -56,7 +55,6 @@ pydantic-settings~=2.12.0
 python-dotenv~=1.2.1
 requests-toolbelt~=1.0.0
 aiofiles~=25.1.0
-services~=0.1.1
 ftfy~=6.3.1
 setuptools~=80.9.0
 tqdm~=4.67.1
@@ -80,3 +78,4 @@ SQLAlchemy~=2.0.45
 smart_open~=7.5.0
 spacy-legacy~=3.0.12
 spacy-loggers~=1.0.5
+psycopg2-binary
