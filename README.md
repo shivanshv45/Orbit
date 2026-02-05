@@ -163,6 +163,17 @@ Orbit/
    - Cache in database
 4. Return blocks to frontend
 
+### Voice Mode Implementation
+- **Architecture**: Hybrid Approach
+  - **Speech Recognition**: Uses browser-native **Web Speech API** (Chrome/Edge recommended) for zero-latency, offline-capable command detection.
+  - **Text-to-Speech**: Uses backend **Piper TTS** for high-quality, consistent voice generation.
+  - **Caching**: Multi-level caching (browser cache + in-memory) for instant playback of common phrases.
+- **Features**:
+  - Push-to-Talk (Hold Control)
+  - Smart Prefetching (loads next section's audio in background)
+  - Automatic Speech Queueing (prevents overlapping audio)
+  - Cross-browser graceful degradation (warns on unsupported browsers)
+
 ## 📚 Documentation
 
 - `README_TDT.md` - Technical design document
@@ -186,7 +197,3 @@ See `FEATURE_ORDER.md` for the complete roadmap. Priority features:
 ## 📄 License
 
 Private project - All rights reserved
-
----
-
-Built with ❤️ using AI-powered learning technology

@@ -91,7 +91,7 @@ function ModuleCard({ module, index, isExpanded, onToggle, onStartLesson }: Modu
             )}
           </div>
           <h3 className={cn(
-            "font-medium",
+            "font-medium truncate",
             isLocked ? "text-muted-foreground" : "text-foreground"
           )}>
             {module.title}
@@ -184,7 +184,7 @@ function SubtopicItem({ subtopic, onStart }: SubtopicItemProps) {
 
       <div className="flex-1 min-w-0">
         <span className={cn(
-          "text-sm",
+          "text-sm truncate block",
           isCompleted && "text-muted-foreground line-through",
           isInProgress && "text-foreground font-medium",
           isAvailable && "text-foreground",

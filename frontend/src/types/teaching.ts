@@ -37,9 +37,12 @@ export interface QuestionBlock {
     options?: string[];
     correctIndex?: number;
     correctAnswer?: string;
+    acceptedAnswers?: string[];
     explanations: QuestionExplanations;
     hint: string;
 }
+
+
 
 export type TeachingBlock =
     | ParagraphBlock

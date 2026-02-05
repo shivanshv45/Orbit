@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createOrGetUser } from '@/logic/userSession';
+import { useUser } from '@clerk/clerk-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -7,6 +8,8 @@ interface Curriculum {
     id: string;
     title: string;
     created_at: string;
+    is_pinned?: boolean;
+    is_archived?: boolean;
 }
 
 async function fetchCurriculums(userId: string): Promise<{ curriculums: Curriculum[] }> {
@@ -16,12 +19,15 @@ async function fetchCurriculums(userId: string): Promise<{ curriculums: Curricul
 }
 
 export function useCurriculums() {
-    const { uid } = createOrGetUser();
+    const { user, isLoaded } = useUser();
+    const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
 
     return useQuery({
         queryKey: ['curriculums', uid],
         queryFn: () => fetchCurriculums(uid),
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        gcTime: 10 * 60 * 1000,   // 10 minutes
+        staleTime: 2 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+        enabled: !!uid,
     });
 }
+

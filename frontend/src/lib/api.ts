@@ -61,4 +61,67 @@ export const api = {
         if (!res.ok) throw new Error('Failed to submit camera metrics');
         return res.json();
     },
+
+    getUserStats: async (userId: string) => {
+        const res = await fetch(`${API_BASE}/api/users/${userId}/stats`);
+        if (!res.ok) throw new Error('Failed to fetch user stats');
+        return res.json();
+    },
+
+    checkRevisionMilestone: async (userId: string, curriculumId: string) => {
+        const res = await fetch(`${API_BASE}/api/revision/check-milestone?user_id=${userId}&curriculum_id=${curriculumId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to check milestone');
+        return res.json();
+    },
+
+    generateRevision: async (userId: string, curriculumId: string, milestone: number) => {
+        const res = await fetch(`${API_BASE}/api/revision/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, curriculum_id: curriculumId, milestone }),
+        });
+        if (!res.ok) throw new Error('Failed to generate revision');
+        return res.json();
+    },
+
+    submitRevisionResults: async (data: {
+        userId: string;
+        curriculumId: string;
+        milestone: number;
+        score: number;
+        totalQuestions: number;
+        correctAnswers: number;
+    }) => {
+        const res = await fetch(`${API_BASE}/api/revision/submit?user_id=${data.userId}&curriculum_id=${data.curriculumId}&milestone=${data.milestone}&score=${data.score}&total_questions=${data.totalQuestions}&correct_answers=${data.correctAnswers}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to submit revision results');
+        return res.json();
+    },
+
+    pinCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}/pin?user_id=${userId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to pin curriculum');
+        return res.json();
+    },
+
+    archiveCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}/archive?user_id=${userId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to archive curriculum');
+        return res.json();
+    },
+
+    deleteCurriculum: async (curriculumId: string, userId: string) => {
+        const res = await fetch(`${API_BASE}/api/curriculum/${curriculumId}?user_id=${userId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete curriculum');
+        return res.json();
+    },
 };

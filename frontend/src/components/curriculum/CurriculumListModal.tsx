@@ -1,7 +1,35 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, BookOpen, Calendar, ChevronRight } from 'lucide-react';
+import { X, BookOpen, Calendar, MoreVertical, Pin, Archive, Trash2, PinOff, Inbox } from 'lucide-react';
 import { useCurriculums } from '@/hooks/useCurriculums';
 import { useNavigate } from 'react-router-dom';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { api } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@clerk/clerk-react';
+import { createOrGetUser } from '@/logic/userSession';
+import { toast } from 'sonner';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
+
+const PinIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 3H8V5H10V11L8 14V16H11V21H13V16H16V14L14 11V5H16V3Z" className="fill-current" />
+        <path d="M16 3H8V5H10V11L8 14V16H11V21H13V16H16V14L14 11V5H16V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
+const BookIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6.5 2H20V22H6.5A2.5 2.5 0 0 1 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 6V11" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.5" strokeLinecap="round" />
+    </svg>
+);
 
 interface CurriculumListModalProps {
     isOpen: boolean;
@@ -11,8 +39,40 @@ interface CurriculumListModalProps {
 export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProps) {
     const { data, isLoading, error } = useCurriculums();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const { user, isLoaded } = useUser();
+    const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+    const accessibility = useAccessibilityModeOptional();
+
+    const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+    const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
+    const [showArchived, setShowArchived] = useState(false);
+    const hasAnnouncedRef = useRef(false);
+
+    // Load state from localStorage on mount/user change
+    useEffect(() => {
+        if (!uid) return;
+
+        try {
+            const pinned = localStorage.getItem(`pinned_curriculums_${uid}`);
+            if (pinned) setPinnedIds(new Set(JSON.parse(pinned)));
+
+            const archived = localStorage.getItem(`archived_curriculums_${uid}`);
+            if (archived) setArchivedIds(new Set(JSON.parse(archived)));
+        } catch (e) {
+            console.error("Failed to load local preference", e);
+        }
+    }, [uid]);
+
+    // Save state helper
+    const saveState = (pinned: Set<string>, archived: Set<string>) => {
+        if (!uid) return;
+        localStorage.setItem(`pinned_curriculums_${uid}`, JSON.stringify(Array.from(pinned)));
+        localStorage.setItem(`archived_curriculums_${uid}`, JSON.stringify(Array.from(archived)));
+    };
 
     const handleSelectCurriculum = (curriculumId: string) => {
+        accessibility?.stop?.();
         navigate(`/curriculum?id=${curriculumId}`);
         onClose();
     };
@@ -21,6 +81,170 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
+
+    const handlePin = (curriculumId: string, isPinned: boolean) => {
+        const newPinned = new Set(pinnedIds);
+        if (isPinned) {
+            newPinned.delete(curriculumId);
+            toast.success("Curriculum unpinned");
+        } else {
+            newPinned.add(curriculumId);
+            toast.success("Curriculum pinned");
+        }
+        setPinnedIds(newPinned);
+        saveState(newPinned, archivedIds);
+    };
+
+    const handleArchive = (curriculumId: string, isArchived: boolean) => {
+        const newArchived = new Set(archivedIds);
+        if (isArchived) {
+            newArchived.delete(curriculumId); // In case we want to unarchive
+            toast.success("Curriculum unarchived");
+        } else {
+            newArchived.add(curriculumId);
+            toast.success("Curriculum archived");
+        }
+        setArchivedIds(newArchived);
+        saveState(pinnedIds, newArchived);
+    };
+
+    const handleDelete = async (curriculumId: string) => {
+        if (!uid) return;
+        if (!confirm("Are you sure you want to delete this curriculum? This action cannot be undone.")) return;
+
+        try {
+            await api.deleteCurriculum(curriculumId, uid);
+            queryClient.invalidateQueries({ queryKey: ['curriculums', uid] });
+
+
+            const newPinned = new Set(pinnedIds);
+            newPinned.delete(curriculumId);
+            const newArchived = new Set(archivedIds);
+            newArchived.delete(curriculumId);
+            setPinnedIds(newPinned);
+            setArchivedIds(newArchived);
+            saveState(newPinned, newArchived);
+
+            toast.success("Curriculum deleted");
+        } catch (error) {
+            toast.error("Failed to delete curriculum");
+        }
+    };
+
+
+    const processedCurriculums = useMemo(() => {
+        if (!data?.curriculums) return [];
+
+        let filtered = data.curriculums.filter(c => {
+            const isArchived = archivedIds.has(c.id);
+            return showArchived ? isArchived : !isArchived;
+        });
+
+        if (!showArchived) {
+            filtered.sort((a, b) => {
+                const aPinned = pinnedIds.has(a.id);
+                const bPinned = pinnedIds.has(b.id);
+                if (aPinned === bPinned) return 0;
+                return aPinned ? -1 : 1;
+            });
+        }
+
+        return filtered;
+    }, [data, pinnedIds, archivedIds, showArchived]);
+
+    // Voice command handler for selecting curriculum by name
+    const handleVoiceCommand = useCallback((text: string): boolean => {
+        const lower = text.toLowerCase();
+        console.log('CurriculumListModal handling:', lower);
+
+        // Close command
+        if (lower.includes('close') || lower.includes('cancel') || lower.includes('exit')) {
+            accessibility?.speak?.('Closing');
+            setTimeout(() => onClose(), 800);
+            return true;
+        }
+
+        // Find matching curriculum by name
+        if (processedCurriculums.length > 0) {
+            // Calculate match score for each curriculum
+            const matches = processedCurriculums.map(c => {
+                const title = c.title.toLowerCase();
+                const words = lower.split(/\s+/);
+                let score = 0;
+
+                // Check for word matches in title
+                for (const word of words) {
+                    if (word.length < 3) continue; // Skip short words
+                    if (title.includes(word)) {
+                        score += word.length;
+                    }
+                }
+
+                // Exact match bonus
+                if (title === lower) score += 100;
+
+                return { curriculum: c, score };
+            }).filter(m => m.score > 0);
+
+            // Sort by score and pick best match
+            matches.sort((a, b) => b.score - a.score);
+
+            if (matches.length > 0 && matches[0].score >= 3) {
+                const selected = matches[0].curriculum;
+                accessibility?.speak?.(`Opening ${selected.title}`);
+                setTimeout(() => handleSelectCurriculum(selected.id), 1200);
+                return true;
+            }
+        }
+
+        // If number is spoken
+        const numMatch = lower.match(/(\d+)|one|two|three|four|five|six|seven|eight|nine|ten/);
+        if (numMatch) {
+            let num = 0;
+            if (numMatch[1]) {
+                num = parseInt(numMatch[1]);
+            } else {
+                const wordNums: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+                num = wordNums[numMatch[0]] || 0;
+            }
+
+            if (num > 0 && num <= processedCurriculums.length) {
+                const selected = processedCurriculums[num - 1];
+                accessibility?.speak?.(`Opening ${selected.title}`);
+                setTimeout(() => handleSelectCurriculum(selected.id), 1200);
+                return true;
+            }
+        }
+
+        return false;
+    }, [processedCurriculums, accessibility, handleSelectCurriculum, onClose]);
+
+    // Set command handler when modal is open in voice mode
+    useEffect(() => {
+        if (isOpen && accessibility?.isOn) {
+            accessibility.setCommandHandler?.(handleVoiceCommand);
+            return () => accessibility.setCommandHandler?.(null);
+        }
+    }, [isOpen, accessibility?.isOn, handleVoiceCommand, accessibility]);
+
+    // Announce courses when modal opens in voice mode
+    useEffect(() => {
+        if (isOpen && accessibility?.isOn && !isLoading && processedCurriculums.length > 0 && !hasAnnouncedRef.current) {
+            hasAnnouncedRef.current = true;
+            const courseNames = processedCurriculums.slice(0, 5).map((c, i) => `${i + 1}, ${c.title}`).join('. ');
+            const message = processedCurriculums.length === 1
+                ? `You have 1 course: ${processedCurriculums[0].title}. Say the course name or number to open it.`
+                : `You have ${processedCurriculums.length} courses. ${courseNames}. Say the course name or number to open it.`;
+
+            setTimeout(() => accessibility.speak?.(message), 500);
+        }
+
+        // Reset when modal closes
+        if (!isOpen) {
+            hasAnnouncedRef.current = false;
+        }
+    }, [isOpen, accessibility?.isOn, isLoading, processedCurriculums, accessibility]);
+
 
     return (
         <AnimatePresence>
@@ -43,25 +267,46 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
                         transition={{ duration: 0.2 }}
                         className="fixed inset-0 z-50 flex items-center justify-center p-4"
                     >
-                        <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+                        <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
                             {/* Header */}
                             <div className="flex items-center justify-between p-6 border-b border-border">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-foreground">Your Curriculums</h2>
+                                    <h2 className="text-2xl font-bold text-foreground">
+                                        {showArchived ? "Archived Curriculums" : "Your Curriculums"}
+                                    </h2>
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        Select a curriculum to continue learning
+                                        {showArchived ? "View your archived learning paths" : "Select a curriculum to continue learning"}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={onClose}
-                                    className="p-2 rounded-xl hover:bg-muted transition-colors"
-                                >
-                                    <X className="w-5 h-5 text-muted-foreground" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShowArchived(!showArchived)}
+                                        className={`p-2 rounded-xl transition-colors flex items-center gap-2 text-sm font-medium ${showArchived ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                                            }`}
+                                    >
+                                        {showArchived ? (
+                                            <>
+                                                <Inbox className="w-4 h-4" />
+                                                View Active
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Archive className="w-4 h-4" />
+                                                Archived
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={onClose}
+                                        className="p-2 rounded-xl hover:bg-muted transition-colors"
+                                    >
+                                        <X className="w-5 h-5 text-muted-foreground" />
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Content */}
-                            <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            <div className="p-6 overflow-y-auto max-h-[60vh] min-h-[300px]">
                                 {isLoading && (
                                     <div className="flex items-center justify-center py-12">
                                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -75,52 +320,121 @@ export function CurriculumListModal({ isOpen, onClose }: CurriculumListModalProp
                                     </div>
                                 )}
 
-                                {data && data.curriculums.length === 0 && (
+                                {!isLoading && processedCurriculums.length === 0 && (
                                     <div className="text-center py-12">
-                                        <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                                        <h3 className="text-lg font-semibold text-foreground mb-2">No curriculums yet</h3>
+                                        {showArchived ? (
+                                            <Archive className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
+                                        ) : (
+                                            <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                                        )}
+                                        <h3 className="text-lg font-semibold text-foreground mb-2">
+                                            {showArchived ? "No archived curriculums" : "No curriculums yet"}
+                                        </h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Upload your first study material to get started
+                                            {showArchived ? "Archived items will appear here" : "Upload your first study material to get started"}
                                         </p>
                                     </div>
                                 )}
 
-                                {data && data.curriculums.length > 0 && (
+                                {!isLoading && processedCurriculums.length > 0 && (
                                     <div className="space-y-3">
-                                        {data.curriculums.map((curriculum) => (
-                                            <motion.button
-                                                key={curriculum.id}
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => handleSelectCurriculum(curriculum.id)}
-                                                className="w-full p-5 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:bg-accent/30 transition-all duration-200 flex items-center justify-between group"
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                        <BookOpen className="w-6 h-6 text-primary" />
-                                                    </div>
-                                                    <div className="text-left">
-                                                        <h4 className="font-semibold text-foreground text-lg mb-1">
-                                                            {curriculum.title}
-                                                        </h4>
-                                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                            <Calendar className="w-4 h-4" />
-                                                            <span>Created {formatDate(curriculum.created_at)}</span>
+                                        {processedCurriculums.map((curriculum) => {
+                                            const isPinned = pinnedIds.has(curriculum.id);
+                                            const isArchived = archivedIds.has(curriculum.id);
+
+                                            return (
+                                                <motion.div
+                                                    key={curriculum.id}
+                                                    initial={{ opacity: 0, x: -10 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    className="group relative"
+                                                >
+                                                    <div
+                                                        onClick={() => handleSelectCurriculum(curriculum.id)}
+                                                        className={`w-full p-5 rounded-xl border-2 bg-card hover:bg-accent/30 transition-all duration-200 flex items-center justify-between cursor-pointer ${isPinned
+                                                            ? 'border-primary/50 shadow-[0_0_15px_-5px_hsl(var(--primary)/0.3)]'
+                                                            : 'border-border hover:border-primary/50'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isPinned ? 'bg-primary/20' : 'bg-primary/10'
+                                                                }`}>
+
+                                                                {isPinned ? (
+                                                                    <PinIcon className="w-6 h-6 text-primary fill-primary/20" />
+                                                                ) : (
+                                                                    <BookIcon className="w-6 h-6 text-primary" />
+                                                                )}
+                                                            </div>
+                                                            <div className="text-left flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    <h4 className="font-semibold text-foreground text-lg mb-1 truncate">
+                                                                        {curriculum.title}
+                                                                    </h4>
+                                                                    {isPinned && (
+                                                                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-primary/20 text-primary">Pinned</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                                    <Calendar className="w-4 h-4 flex-shrink-0" />
+                                                                    <span>Created {formatDate(curriculum.created_at)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <button className="p-2 rounded-lg hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors focus:outline-none">
+                                                                        <MoreVertical className="w-5 h-5" />
+                                                                    </button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="w-[12rem] bg-popover z-[150]">
+                                                                    <DropdownMenuItem onSelect={() => handlePin(curriculum.id, isPinned)}>
+                                                                        {isPinned ? (
+                                                                            <>
+                                                                                <PinOff className="w-4 h-4 mr-2" />
+                                                                                Unpin
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Pin className="w-4 h-4 mr-2" />
+                                                                                Pin to Top
+                                                                            </>
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onSelect={() => handleArchive(curriculum.id, isArchived)}>
+                                                                        {isArchived ? (
+                                                                            <>
+                                                                                <Inbox className="w-4 h-4 mr-2" />
+                                                                                Unarchive
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Archive className="w-4 h-4 mr-2" />
+                                                                                Archive
+                                                                            </>
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onSelect={() => handleDelete(curriculum.id)} className="text-destructive focus:text-destructive">
+                                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                                            </motion.button>
-                                        ))}
+                                                </motion.div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
                         </div>
                     </motion.div>
                 </>
-            )}
-        </AnimatePresence>
+            )
+            }
+        </AnimatePresence >
     );
 }

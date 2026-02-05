@@ -1,271 +1,434 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb, Sparkles } from 'lucide-react';
+import { Lightbulb, Sparkles, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AskAIChat } from '@/components/teaching/AskAIChat';
 import { QuestionBlock } from '@/components/teaching/QuestionBlock';
 import { SimulationBlock } from '@/components/teaching/SimulationBlock';
-import type { TeachingBlock, QuestionBlock as QuestionType } from '@/types/teaching';
+import type { TeachingBlock } from '@/types/teaching';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
+import { useAccessibilityMode } from '@/context/AccessibilityModeContext';
+import { VoiceContentConverter } from '@/lib/voice/VoiceContentConverter';
+import { VoiceSettings } from './VoiceSettings';
+import { formatFormula } from '@/lib/formatFormula';
 
 interface TeachingCanvasProps {
   blocks: TeachingBlock[];
   subtopicId: string;
   onNext: () => void;
+  onPrevious?: () => void;
   hasNext: boolean;
+  hasPrevious?: boolean;
+  onNextLesson?: () => void;
+  onPreviousLesson?: () => void;
 }
 
-export function TeachingCanvas({ blocks, subtopicId, onNext, hasNext }: TeachingCanvasProps) {
+export function TeachingCanvas({
+  blocks,
+  subtopicId,
+  onNext,
+  onPrevious,
+  hasNext,
+  onNextLesson,
+  onPreviousLesson,
+}: TeachingCanvasProps) {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [askAIOpen, setAskAIOpen] = useState<number | null>(null);
+  const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [questionAnswered, setQuestionAnswered] = useState<Record<number, boolean>>({});
   const [questionScores, setQuestionScores] = useState<Record<number, number>>({});
   const { uid } = createOrGetUser();
+
+  const {
+    isOn,
+    speak,
+    speakAll,
+    stop,
+    prefetch,
+    setCommandHandler,
+    registerBlockSpeaker,
+    updateSpeed,
+    getSpeed,
+  } = useAccessibilityMode();
+
+  const converterRef = useRef(new VoiceContentConverter('normal'));
+  const lastSpokenRef = useRef('');
+  const speakCurrentBlockRef = useRef<() => void>(() => { });
 
   useEffect(() => {
     setCurrentChunkIndex(0);
     setAskAIOpen(null);
     setQuestionAnswered({});
     setQuestionScores({});
+    lastSpokenRef.current = '';
+    if (isOn) {
+      stop();
+    }
   }, [subtopicId]);
-
-  if (!blocks || blocks.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-96 text-muted-foreground">
-        Content not available
-      </div>
-    );
-  }
 
   const visibleBlocks = blocks.slice(0, currentChunkIndex + 1);
   const hasMoreChunks = currentChunkIndex < blocks.length - 1;
   const currentBlock = blocks[currentChunkIndex];
-
-  const questions = blocks.filter(b => b.type === 'question') as QuestionType[];
-  const totalQuestions = questions.length;
+  const totalQuestions = blocks.filter(b => b.type === 'question').length;
   const answeredCount = Object.keys(questionAnswered).length;
 
-  const handleContinue = async () => {
-    if (currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]) {
+  const speakCurrentBlock = useCallback(() => {
+    if (!isOn || !blocks[currentChunkIndex]) return;
+
+    const scripts = converterRef.current.convertBlock(blocks[currentChunkIndex], currentChunkIndex, blocks.length);
+    const texts = scripts.map(s => s.text);
+    if (texts.length > 0) {
+      speakAll(texts);
+    }
+
+    const nextIdx = currentChunkIndex + 1;
+    if (nextIdx < blocks.length) {
+      const nextScripts = converterRef.current.convertBlock(blocks[nextIdx], nextIdx, blocks.length);
+      prefetch(nextScripts.map(s => s.text));
+    }
+  }, [isOn, blocks, currentChunkIndex, speakAll, prefetch]);
+
+  useEffect(() => {
+    speakCurrentBlockRef.current = speakCurrentBlock;
+  }, [speakCurrentBlock]);
+
+  useEffect(() => {
+    registerBlockSpeaker(() => speakCurrentBlockRef.current());
+  }, [registerBlockSpeaker]);
+
+  useEffect(() => {
+    if (!isOn || !subtopicId || blocks.length === 0) {
+      lastSpokenRef.current = '';
       return;
     }
 
+    const key = `${subtopicId}-${currentChunkIndex}`;
+    if (lastSpokenRef.current === key) return;
+    lastSpokenRef.current = key;
+
+    const timer = setTimeout(() => {
+      if (lastSpokenRef.current === key && isOn && subtopicId && blocks.length > 0) {
+        speakCurrentBlockRef.current();
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isOn, subtopicId, currentChunkIndex, blocks.length]);
+
+  const handleContinue = useCallback(async () => {
+    if (currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]) return;
+
     if (hasMoreChunks) {
+      if (isOn) {
+        stop();
+      }
       setCurrentChunkIndex(prev => prev + 1);
       setAskAIOpen(null);
     } else {
       if (totalQuestions > 0 && answeredCount === totalQuestions) {
         const scores = Object.values(questionScores);
-        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        const finalScore = Math.round(avgScore * 100);
-
+        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
         try {
-          await api.updateSubtopicScore({
-            user_id: uid,
-            subtopic_id: subtopicId,
-            final_score: finalScore,
-          });
-        } catch (error) {
-          console.error('Failed to update score:', error);
-        }
+          await api.updateSubtopicScore({ user_id: uid, subtopic_id: subtopicId, final_score: Math.round(avg * 100) });
+        } catch { }
       }
-
+      if (isOn) {
+        stop();
+      }
       setCurrentChunkIndex(0);
+      lastSpokenRef.current = '';
       onNext();
     }
-  };
+  }, [currentBlock, currentChunkIndex, hasMoreChunks, questionAnswered, totalQuestions, answeredCount, questionScores, uid, subtopicId, onNext, isOn, stop]);
 
   const handleQuestionCorrect = (index: number, attemptCount: number) => {
     setQuestionAnswered(prev => ({ ...prev, [index]: true }));
-
-    let score = 0.25;
-    if (attemptCount === 1) score = 1.0;
-    else if (attemptCount === 2) score = 0.75;
-    else if (attemptCount === 3) score = 0.5;
-
+    let score = attemptCount === 1 ? 1.0 : attemptCount === 2 ? 0.75 : attemptCount === 3 ? 0.5 : 0.25;
     setQuestionScores(prev => ({ ...prev, [index]: score }));
+    if (isOn) speak(attemptCount === 1 ? 'Correct! Great job!' : 'Correct! Say next to continue.');
   };
 
-  const getTextContent = (block: TeachingBlock): string => {
-    switch (block.type) {
-      case 'paragraph':
-        return block.content;
-      case 'insight':
-        return block.content;
-      case 'formula':
-        return `${block.formula} - ${block.explanation}`;
-      case 'list':
-        return block.items.join(', ');
-      case 'question':
-        return block.question;
-      default:
-        return 'This section';
+  const handleCommand = useCallback((text: string): boolean => {
+    const lower = text.toLowerCase();
+    console.log('TeachingCanvas handling:', lower);
+
+    if (lower.includes('next') || lower.includes('continue')) {
+      handleContinue();
+      return true;
     }
+
+    if (lower.includes('repeat') || lower.includes('again')) {
+      lastSpokenRef.current = '';
+      speakCurrentBlock();
+      return true;
+    }
+
+    if (lower.includes('back') || (lower.includes('previous') && !lower.includes('lesson'))) {
+      if (currentChunkIndex > 0) {
+        setCurrentChunkIndex(prev => prev - 1);
+        lastSpokenRef.current = '';
+      } else if (onPrevious) {
+        onPrevious();
+      }
+      return true;
+    }
+
+    if (lower.includes('next lesson')) {
+      if (onNextLesson) {
+        speak('Going to next lesson');
+        setTimeout(() => onNextLesson(), 1500);
+      } else {
+        speak('No next lesson');
+      }
+      return true;
+    }
+
+    if (lower.includes('previous lesson')) {
+      if (onPreviousLesson) {
+        speak('Going to previous lesson');
+        setTimeout(() => onPreviousLesson(), 1500);
+      } else {
+        speak('No previous lesson');
+      }
+      return true;
+    }
+
+    if (lower.includes('faster')) {
+      updateSpeed(Math.min(2, getSpeed() + 0.2));
+      speak('Speed increased');
+      return true;
+    }
+
+    if (lower.includes('slower')) {
+      updateSpeed(Math.max(0.5, getSpeed() - 0.2));
+      speak('Speed decreased');
+      return true;
+    }
+
+    if (lower.includes('where') || lower.includes('position')) {
+      speak(`Section ${currentChunkIndex + 1} of ${blocks.length}`);
+      return true;
+    }
+
+    // Support for MCQ answer selection: letters, numbers, ordinals
+    if (currentBlock?.type === 'question') {
+      let option: string | null = null;
+
+      // Match letter options: a, b, c, d
+      const letterMatch = lower.match(/\b([abcd])\b/);
+      if (letterMatch) {
+        option = letterMatch[1].toUpperCase();
+      }
+
+      // Match number options: 1, 2, 3, 4 or one, two, three, four
+      if (!option) {
+        if (lower.includes('1') || lower.includes('one') || lower.includes('first')) option = 'A';
+        else if (lower.includes('2') || lower.includes('two') || lower.includes('second')) option = 'B';
+        else if (lower.includes('3') || lower.includes('three') || lower.includes('third')) option = 'C';
+        else if (lower.includes('4') || lower.includes('four') || lower.includes('fourth')) option = 'D';
+      }
+
+      if (option) {
+        speak(`Selecting option ${option}`);
+        setTimeout(() => {
+          const btn = document.querySelector(`button[data-option="${option}"]`) as HTMLButtonElement;
+          if (btn) btn.click();
+        }, 800);
+        return true;
+      }
+    }
+
+    if ((lower.includes('submit') || lower.includes('check') || lower.includes('confirm') || lower.includes('enter')) && currentBlock?.type === 'question') {
+      speak('Submitting answer');
+      setTimeout(() => {
+        const btn = document.querySelector('button[data-submit-btn="true"]') as HTMLButtonElement;
+        if (btn) btn.click();
+      }, 800);
+      return true;
+    }
+
+    // Try again after wrong answer
+    if ((lower.includes('try again') || lower.includes('retry')) && currentBlock?.type === 'question') {
+      speak('Trying again');
+      setTimeout(() => {
+        const tryAgainBtn = document.querySelector('button:not([data-submit-btn])') as HTMLButtonElement;
+        if (tryAgainBtn && tryAgainBtn.textContent?.includes('Try Again')) {
+          tryAgainBtn.click();
+        }
+      }, 500);
+      return true;
+    }
+
+    // Fill-in-the-blank: type the spoken answer
+    // Trigger with "answer is [something]" or "type [something]" or "fill [something]"
+    if (currentBlock?.type === 'question') {
+      const questionData = currentBlock as any;
+      if (questionData.questionType === 'fill_in_blank') {
+        let answer = '';
+
+        // Extract answer from various patterns
+        const answerMatch = lower.match(/(?:answer is|answer|type|fill|write|put|enter|say)\s+(.+)/i);
+        if (answerMatch) {
+          answer = answerMatch[1].trim();
+        } else {
+          // If no pattern matched, use the whole text as the answer
+          // But exclude common commands
+          const excluded = ['next', 'previous', 'back', 'continue', 'repeat', 'submit', 'check', 'confirm', 'faster', 'slower', 'help'];
+          if (!excluded.some(cmd => lower.includes(cmd))) {
+            answer = text.trim();
+          }
+        }
+
+        if (answer) {
+          speak(`Typing ${answer}`);
+          setTimeout(() => {
+            const input = document.querySelector('input[data-fill-input="true"]') as HTMLInputElement;
+            if (input) {
+              // Simulate React onChange event
+              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+              if (nativeInputValueSetter) {
+                nativeInputValueSetter.call(input, answer);
+                const event = new Event('input', { bubbles: true });
+                input.dispatchEvent(event);
+              }
+              input.focus();
+            }
+          }, 800);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, [currentChunkIndex, currentBlock, blocks.length, handleContinue, speakCurrentBlock, onPrevious, onNextLesson, onPreviousLesson, speak, updateSpeed, getSpeed]);
+
+  useEffect(() => {
+    if (isOn) {
+      setCommandHandler(handleCommand);
+      return () => setCommandHandler(null);
+    }
+  }, [isOn, handleCommand, setCommandHandler]);
+
+  const renderMarkdown = (content: string) => {
+    const parts = content.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-semibold text-primary">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
   };
 
   const renderBlock = (block: TeachingBlock) => {
     switch (block.type) {
       case 'paragraph':
-        return (
-          <p className="text-foreground leading-relaxed text-lg">
-            {block.content}
-          </p>
-        );
-
+        return <p className="text-foreground leading-relaxed text-lg">{renderMarkdown(block.content)}</p>;
       case 'formula':
         return (
-          <div className="my-6 p-8 rounded-2xl bg-accent/50 border border-primary/20 text-center">
-            <div className="text-4xl font-serif text-foreground mb-2">
-              {block.formula}
+          <div className="relative p-8 rounded-2xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="font-mono text-foreground tracking-wide text-center px-6 py-4 bg-background/50 rounded-xl border border-border/50 shadow-lg text-2xl">
+                <code className="whitespace-pre-wrap break-words">{formatFormula(block.formula)}</code>
+              </div>
+              {block.explanation && <p className="text-sm text-muted-foreground text-center max-w-2xl">{block.explanation}</p>}
             </div>
-            {block.explanation && (
-              <p className="text-sm text-muted-foreground">{block.explanation}</p>
-            )}
           </div>
         );
-
       case 'insight':
         return (
-          <div className="flex gap-4 p-5 rounded-2xl bg-success/10 border border-success/20">
-            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
-              <Lightbulb className="w-5 h-5 text-success" />
+          <div className="flex gap-4 p-5 rounded-2xl bg-yellow-500/10 border border-yellow-500/30">
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+              <Lightbulb className="w-5 h-5 text-yellow-500" />
             </div>
             <div>
-              <p className="font-medium text-foreground mb-1">Key Insight</p>
-              <p className="text-muted-foreground">{block.content}</p>
+              <p className="font-semibold text-yellow-500 mb-1">Key Insight</p>
+              <p className="text-foreground">{renderMarkdown(block.content)}</p>
             </div>
           </div>
         );
-
       case 'list':
         return (
           <ul className="space-y-2 pl-1">
             {block.items?.map((item, i) => (
               <li key={i} className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0 mt-0.5">
-                  {i + 1}
-                </span>
-                <span className="text-foreground">{item}</span>
+                <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0 mt-0.5">{i + 1}</span>
+                <span className="text-foreground">{renderMarkdown(item)}</span>
               </li>
             ))}
           </ul>
         );
-
       case 'simulation':
-        return (
-          <SimulationBlock html={block.html} description={block.description} />
-        );
-
+        return <SimulationBlock html={block.html} description={block.description} />;
       case 'question':
         return null;
-
       default:
         return null;
     }
   };
 
+  const getTextContent = (block: TeachingBlock): string => {
+    switch (block.type) {
+      case 'paragraph': case 'insight': return block.content;
+      case 'formula': return `${block.formula} - ${block.explanation}`;
+      case 'list': return block.items.join(', ');
+      case 'question': return block.question;
+      default: return '';
+    }
+  };
+
+  if (!blocks || blocks.length === 0) {
+    return <div className="flex items-center justify-center h-96 text-muted-foreground">Content not available</div>;
+  }
+
   return (
     <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-2"
-      >
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>{currentChunkIndex + 1} of {blocks.length} sections</span>
-          <div className="flex-1 max-w-32 h-1 rounded-full bg-muted overflow-hidden">
-            <motion.div
-              className="h-full bg-primary rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${((currentChunkIndex + 1) / blocks.length) * 100}%` }}
-              transition={{ duration: 0.3 }}
-            />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+        <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 flex-1">
+            <span>{currentChunkIndex + 1} of {blocks.length} sections</span>
+            <div className="flex-1 max-w-32 h-1 rounded-full bg-muted overflow-hidden">
+              <motion.div className="h-full bg-primary rounded-full" initial={{ width: 0 }} animate={{ width: `${((currentChunkIndex + 1) / blocks.length) * 100}%` }} transition={{ duration: 0.3 }} />
+            </div>
           </div>
+          {isOn && (
+            <button onClick={() => setSettingsOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Voice settings">
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </motion.div>
 
       <div className="space-y-4">
         <AnimatePresence mode="sync">
           {visibleBlocks.map((block, index) => (
-            <motion.div
-              key={`${subtopicId}-${index}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index === currentChunkIndex ? 0.1 : 0 }}
-              className="relative"
-            >
-              <div className={cn(
-                "transition-opacity duration-300",
-                index < currentChunkIndex ? "opacity-60" : "opacity-100"
-              )}>
-                {block.type === 'question' ? (
-                  <QuestionBlock
-                    question={block}
-                    subtopicId={subtopicId}
-                    onCorrect={(attemptCount) => handleQuestionCorrect(index, attemptCount)}
-                  />
-                ) : (
-                  renderBlock(block)
-                )}
+            <motion.div key={`${subtopicId}-${index}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index === currentChunkIndex ? 0.1 : 0 }} className="relative" onMouseEnter={() => setHoveredBlock(index)} onMouseLeave={() => setHoveredBlock(null)}>
+              <div className={cn("transition-opacity duration-300", index < currentChunkIndex ? "opacity-60 hover:opacity-100" : "opacity-100")}>
+                {block.type === 'question' ? <QuestionBlock question={block} subtopicId={subtopicId} onCorrect={(count) => handleQuestionCorrect(index, count)} /> : renderBlock(block)}
               </div>
-
-              {index === currentChunkIndex && block.type !== 'question' && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="mt-3"
-                >
-                  <button
-                    onClick={() => setAskAIOpen(askAIOpen === index ? null : index)}
-                    className={cn(
-                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all",
-                      askAIOpen === index
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
+              {(index === currentChunkIndex || hoveredBlock === index) && block.type !== 'question' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="mt-3">
+                  <button onClick={() => setAskAIOpen(askAIOpen === index ? null : index)} data-ask-ai="true" className={cn("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all", askAIOpen === index ? "bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground")}>
                     <Sparkles className="w-3.5 h-3.5" />
                     Ask AI about this
                   </button>
-
-                  <AskAIChat
-                    quotedText={getTextContent(block)}
-                    isOpen={askAIOpen === index}
-                    onClose={() => setAskAIOpen(null)}
-                  />
+                  <AskAIChat quotedText={getTextContent(block)} isOpen={askAIOpen === index} onClose={() => setAskAIOpen(null)} />
                 </motion.div>
               )}
-
-              {index < currentChunkIndex && (
-                <div className="mt-4 border-b border-border/50" />
-              )}
+              {index < currentChunkIndex && <div className="mt-4 border-b border-border/50" />}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
-      <motion.div
-        key={`continue-${currentChunkIndex}`}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="pt-4"
-      >
-        <button
-          onClick={handleContinue}
-          disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]}
-          className={cn(
-            "w-full h-14 rounded-2xl font-medium text-lg transition-all duration-300",
-            currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]
-              ? "bg-muted text-muted-foreground cursor-not-allowed"
-              : "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-glow"
-          )}
-        >
+      <motion.div key={`continue-${currentChunkIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="pt-4">
+        <button onClick={handleContinue} disabled={currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex]} className={cn("w-full h-14 rounded-2xl font-medium text-lg transition-all duration-300", currentBlock?.type === 'question' && !questionAnswered[currentChunkIndex] ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:scale-[1.01] hover:shadow-glow")}>
           {hasMoreChunks ? 'Continue' : (hasNext ? 'Next Lesson' : 'Complete')}
         </button>
       </motion.div>
+
+      <VoiceSettings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onPreferencesChange={(p) => { if (p.rate) updateSpeed(p.rate); }} onTestVoice={(t) => speak(t)} />
     </div>
   );
 }

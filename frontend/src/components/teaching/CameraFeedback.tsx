@@ -20,7 +20,7 @@ export function CameraFeedback({ metrics, expanded = false }: CameraFeedbackProp
         ((100 - metrics.confusion_level) * 0.2)
     );
 
-    // Color based on score
+
     const color = score > 75 ? 'text-green-500' : score > 40 ? 'text-yellow-500' : 'text-red-500';
     const bgColor = score > 75 ? 'bg-green-500' : score > 40 ? 'bg-yellow-500' : 'bg-red-500';
     const borderColor = score > 75 ? 'border-green-500/20' : score > 40 ? 'border-yellow-500/20' : 'border-red-500/20';
@@ -43,7 +43,7 @@ export function CameraFeedback({ metrics, expanded = false }: CameraFeedbackProp
                 expanded ? "px-4 py-3" : "px-2 py-1.5"
             )}
         >
-            {/* Score Ring */}
+
             <div className="relative w-10 h-10 flex items-center justify-center">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                     <path
@@ -70,7 +70,7 @@ export function CameraFeedback({ metrics, expanded = false }: CameraFeedbackProp
                 </div>
             </div>
 
-            {/* Metrics Detail */}
+
             {expanded && (
                 <div className="flex flex-col min-w-[100px]">
                     <span className={cn("text-sm font-bold", color)}>
@@ -89,7 +89,7 @@ export function CameraFeedback({ metrics, expanded = false }: CameraFeedbackProp
                 </div>
             )}
 
-            {/* Pulsing Dot */}
+
             {!expanded && (
                 <div className={cn("w-2 h-2 rounded-full animate-pulse", bgColor)} />
             )}

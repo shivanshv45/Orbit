@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Loader2, Video, VideoOff } from 'lucide-react';
 import { CameraFeedback } from '@/components/teaching/CameraFeedback';
@@ -13,6 +13,8 @@ import { createOrGetUser } from '@/logic/userSession';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Module, Subtopic } from '@/types/curriculum';
+import { useUser } from '@clerk/clerk-react';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 export default function LearnPage() {
   const navigate = useNavigate();
@@ -20,14 +22,35 @@ export default function LearnPage() {
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const { uid } = createOrGetUser();
-  const queryClient = useQueryClient();
+  const { user, isLoaded } = useUser();
+  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+  const accessibility = useAccessibilityModeOptional();
 
-  const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const urlCurriculumId = searchParams.get('id') || undefined;
+  const [curriculumId, setCurriculumId] = useState(urlCurriculumId);
+
+  const { data: curriculumData, isLoading: curriculumLoading } = useCurriculum(curriculumId);
   const { data: teachingData, isLoading: teachingLoading, error } = useTeachingContent(currentSubtopicId);
 
-  // Face tracking hook
+  useEffect(() => {
+    if (urlCurriculumId) {
+      setCurriculumId(urlCurriculumId);
+    }
+  }, [urlCurriculumId]);
+
+  useEffect(() => {
+    if (teachingData?.curriculum_id && !urlCurriculumId) {
+      setCurriculumId(teachingData.curriculum_id);
+    }
+  }, [teachingData, urlCurriculumId]);
+
+
   const { isActive: cameraActive, currentMetrics } = useFaceTracking(currentSubtopicId, cameraEnabled);
+
+
+
 
   // Log metrics for debugging
   useEffect(() => {
@@ -36,7 +59,49 @@ export default function LearnPage() {
     }
   }, [cameraEnabled, currentMetrics]);
 
-  // Update current subtopic when URL changes
+
+  const calculateStreak = () => {
+    try {
+      const stored = localStorage.getItem('orbit_streak_data');
+      const today = new Date().toISOString().split('T')[0];
+
+      if (!stored) {
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: 1, lastDate: today }));
+        return 1;
+      }
+
+      const { count, lastDate } = JSON.parse(stored);
+
+      if (lastDate === today) return count;
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastDate === yesterdayStr) {
+        const newCount = count + 1;
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: newCount, lastDate: today }));
+        return newCount;
+      } else {
+
+        localStorage.setItem('orbit_streak_data', JSON.stringify({ count: 1, lastDate: today }));
+        return 1;
+      }
+    } catch (e) {
+      console.error("Streak calc error", e);
+      return 0;
+    }
+  };
+
+  const streak = calculateStreak();
+
+  // Stop voice when leaving the page
+  useEffect(() => {
+    return () => {
+      accessibility?.stop?.();
+    };
+  }, [accessibility]);
+
   useEffect(() => {
     if (subtopicId) {
       setCurrentSubtopicId(subtopicId);
@@ -54,38 +119,92 @@ export default function LearnPage() {
   const nextSubtopic = currentIndex >= 0 && currentIndex < allSubtopics.length - 1
     ? allSubtopics[currentIndex + 1]
     : null;
+  const previousSubtopic = currentIndex > 0
+    ? allSubtopics[currentIndex - 1]
+    : null;
 
-  // Prefetch next subtopic
   useEffect(() => {
-    if (nextSubtopic && nextSubtopic.id) {
+    if (!nextSubtopic?.id || !teachingData) return;
+
+    const timer = setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ['teaching', nextSubtopic.id],
         queryFn: () => api.getTeachingContent(nextSubtopic.id, uid),
         staleTime: Infinity,
       });
-    }
-  }, [nextSubtopic, queryClient, uid]);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [nextSubtopic, queryClient, uid, teachingData]);
+
+
 
   const handleSelectSubtopic = (id: string) => {
     setCurrentSubtopicId(id);
-    navigate(`/learn/${id}`, { replace: true });
+    navigate(`/learn/${id}${curriculumId ? `?id=${curriculumId}` : ''}`, { replace: true });
   };
 
   const handleNext = () => {
+    // Invalidate curriculum query to update stats immediately
+    queryClient.invalidateQueries({ queryKey: ['curriculum'] });
+
     if (nextSubtopic) {
       handleSelectSubtopic(nextSubtopic.id);
     } else {
-      navigate('/curriculum');
+      navigate(curriculumId ? `/curriculum?id=${curriculumId}` : '/curriculum');
+    }
+  };
+
+  const handlePrevious = () => {
+    // Invalidate curriculum query to update stats immediately
+    queryClient.invalidateQueries({ queryKey: ['curriculum'] });
+
+    if (previousSubtopic) {
+      handleSelectSubtopic(previousSubtopic.id);
     }
   };
 
   const handleBack = () => {
-    navigate('/curriculum');
+    accessibility?.stop?.();
+    navigate(curriculumId ? `/curriculum?id=${curriculumId}` : '/curriculum');
   };
 
+  // Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) return;
+
+      if (e.key === 'ArrowRight') {
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevious();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nextSubtopic, previousSubtopic, navigate]); // Add simpler dependencies if possible, or assume handlers are stable if wrapped (they aren't wrapped in useCallback currently)
+
+
+
+
   // Calculate some stats for progress panel
-  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed').length;
-  const totalSubtopics = allSubtopics.length;
+  // Calculate some stats for progress panel
+  const completedSubtopicsFiltered = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
+  const lessonsCompleted = completedSubtopicsFiltered.length;
+  const totalLessons = allSubtopics.length;
+
+  const avgPracticeScore = completedSubtopicsFiltered.length > 0
+    ? Math.round(completedSubtopicsFiltered.reduce((acc: number, curr: Subtopic) => acc + (curr.score || 0), 0) / completedSubtopicsFiltered.length)
+    : 0;
+
+  const remainingLessons = totalLessons - lessonsCompleted;
+  const estimatedMinutes = remainingLessons * 15;
+  const estimatedHours = Math.floor(estimatedMinutes / 60);
+  const estimatedMins = estimatedMinutes % 60;
+  const estimatedTimeLeft = estimatedHours > 0 ? `${estimatedHours}h ${estimatedMins}m` : `${estimatedMins}m`;
+
+  const nextMilestoneTitle = allSubtopics.find((s: Subtopic) => s.status !== 'completed')?.title || "All Complete!";
 
   if (curriculumLoading) {
     return (
@@ -126,7 +245,7 @@ export default function LearnPage() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative">
-        {/* Camera Toggle - Fixed Below Sidebar Toggle */}
+        {/* Camera & Voice Toggle - Fixed Below Sidebar Toggle */}
         <div className="fixed top-16 right-4 z-40 flex flex-col items-end gap-3">
           <button
             onClick={() => setCameraEnabled(!cameraEnabled)}
@@ -186,20 +305,26 @@ export default function LearnPage() {
                 blocks={teachingData?.blocks || []}
                 subtopicId={currentSubtopicId}
                 onNext={handleNext}
+                onPrevious={handlePrevious}
                 hasNext={!!nextSubtopic}
+                hasPrevious={!!previousSubtopic}
+                onNextLesson={nextSubtopic ? () => handleSelectSubtopic(nextSubtopic.id) : undefined}
+                onPreviousLesson={previousSubtopic ? () => handleSelectSubtopic(previousSubtopic.id) : undefined}
               />
             </motion.div>
           )}
         </div>
       </main>
 
+
       {/* Right Sidebar - Progress (Toggleable) */}
       <ProgressIndicator
-        streak={3}
-        lessonsCompleted={completedSubtopics}
-        totalLessons={totalSubtopics}
-        practiceScore={85}
-        estimatedTimeLeft="2h 15m"
+        streak={streak}
+        lessonsCompleted={lessonsCompleted}
+        totalLessons={totalLessons}
+        practiceScore={avgPracticeScore}
+        estimatedTimeLeft={estimatedTimeLeft}
+        nextMilestone={nextMilestoneTitle}
         isOpen={progressPanelOpen}
         onToggle={() => setProgressPanelOpen(!progressPanelOpen)}
       />

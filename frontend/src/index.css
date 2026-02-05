@@ -6,132 +6,112 @@
 
 @layer base {
   :root {
-    /* Warm neutral backgrounds */
-    --background: 40 20% 98%;
-    --foreground: 220 25% 10%;
+    /* Light mode - Cool Tech / Day on Space Station */
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
 
-    /* Cards slightly warmer */
-    --card: 40 15% 99%;
-    --card-foreground: 220 25% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 40 15% 99%;
-    --popover-foreground: 220 25% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Deep teal - calm, focused, educational */
-    --primary: 175 60% 30%;
-    --primary-foreground: 0 0% 100%;
+    /* Cosmic Purple/Blue Primary */
+    --primary: 250 80% 60%;
+    --primary-foreground: 210 40% 98%;
 
-    /* Soft warm gray */
-    --secondary: 40 10% 94%;
-    --secondary-foreground: 220 25% 15%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
 
-    /* Muted tones */
-    --muted: 40 10% 92%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    /* Teal accent for highlights */
-    --accent: 175 50% 92%;
-    --accent-foreground: 175 60% 25%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
 
-    /* Warm amber for success/progress */
-    --success: 45 90% 50%;
-    --success-foreground: 45 100% 15%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Completion green */
-    --complete: 160 60% 45%;
-    --complete-foreground: 0 0% 100%;
-
-    /* Soft coral for practice/recall */
-    --practice: 15 80% 60%;
-    --practice-foreground: 0 0% 100%;
-
-    /* Error states */
-    --destructive: 0 70% 55%;
-    --destructive-foreground: 0 0% 100%;
-
-    /* Borders */
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 175 60% 30%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 250 80% 60%;
 
     --radius: 0.75rem;
 
     /* Simulation specific */
-    --simulation-bg: 220 30% 97%;
-    --simulation-object: 175 60% 45%;
-    --simulation-track: 220 20% 85%;
-
-    /* Progress bar gradient */
-    --progress-start: 175 60% 45%;
-    --progress-end: 160 60% 40%;
+    --simulation-bg: 210 20% 98%;
+    --simulation-object: 250 80% 60%;
+    --simulation-track: 210 20% 90%;
 
     /* Sidebar */
-    --sidebar-background: 40 15% 97%;
-    --sidebar-foreground: 220 25% 20%;
-    --sidebar-primary: 175 60% 30%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 175 50% 94%;
-    --sidebar-accent-foreground: 175 60% 25%;
-    --sidebar-border: 40 15% 90%;
-    --sidebar-ring: 175 60% 30%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 240 6% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 240 6% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   .dark {
-    --background: 220 25% 8%;
-    --foreground: 40 15% 95%;
+    /* Deep Space Background */
+    --background: 240 10% 3.9%;
+    /* #09090b - Very dark */
+    --foreground: 0 0% 98%;
 
-    --card: 220 25% 10%;
-    --card-foreground: 40 15% 95%;
+    --card: 240 10% 5%;
+    /* Slightly lighter than bg */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 220 25% 10%;
-    --popover-foreground: 40 15% 95%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 175 55% 45%;
-    --primary-foreground: 220 25% 8%;
+    /* Vibrant Nebula Purple */
+    --primary: 260 100% 70%;
+    /* Glowing Purple */
+    --primary-foreground: 240 10% 3.9%;
 
-    --secondary: 220 20% 15%;
-    --secondary-foreground: 40 15% 90%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 20% 18%;
-    --muted-foreground: 40 10% 60%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
 
-    --accent: 175 40% 20%;
-    --accent-foreground: 175 55% 70%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
 
-    --success: 45 85% 55%;
-    --success-foreground: 45 100% 10%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
 
-    --complete: 160 55% 50%;
-    --complete-foreground: 220 25% 8%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 260 100% 70%;
 
-    --practice: 15 75% 55%;
-    --practice-foreground: 220 25% 8%;
+    --simulation-bg: 240 10% 4%;
+    --simulation-object: 260 100% 70%;
+    --simulation-track: 240 10% 12%;
 
-    --destructive: 0 65% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 20% 18%;
-    --input: 220 20% 18%;
-    --ring: 175 55% 45%;
-
-    --simulation-bg: 220 25% 12%;
-    --simulation-object: 175 55% 50%;
-    --simulation-track: 220 20% 25%;
-
-    --sidebar-background: 220 25% 10%;
-    --sidebar-foreground: 40 15% 90%;
-    --sidebar-primary: 175 55% 45%;
-    --sidebar-primary-foreground: 220 25% 8%;
-    --sidebar-accent: 175 40% 18%;
-    --sidebar-accent-foreground: 175 55% 70%;
-    --sidebar-border: 220 20% 15%;
-    --sidebar-ring: 175 55% 45%;
+    --sidebar-background: 240 6% 5%;
+    --sidebar-foreground: 240 5% 85%;
+    --sidebar-primary: 260 100% 70%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4% 16%;
+    --sidebar-accent-foreground: 240 5% 90%;
+    --sidebar-border: 240 4% 16%;
+    --sidebar-ring: 260 100% 70%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   html {
@@ -145,6 +125,7 @@
 }
 
 @layer components {
+
   /* Glass card effect */
   .glass-card {
     @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-sm;
@@ -201,6 +182,7 @@
 }
 
 @layer utilities {
+
   /* Fade in animation */
   .animate-fade-up {
     animation: fadeUp 0.5s ease-out forwards;
@@ -211,6 +193,7 @@
       opacity: 0;
       transform: translateY(20px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -218,19 +201,42 @@
   }
 
   /* Stagger children */
-  .stagger-children > * {
+  .stagger-children>* {
     animation: fadeUp 0.4s ease-out forwards;
     opacity: 0;
   }
 
-  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
-  .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
-  .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
-  .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+  .stagger-children>*:nth-child(1) {
+    animation-delay: 0ms;
+  }
+
+  .stagger-children>*:nth-child(2) {
+    animation-delay: 50ms;
+  }
+
+  .stagger-children>*:nth-child(3) {
+    animation-delay: 100ms;
+  }
+
+  .stagger-children>*:nth-child(4) {
+    animation-delay: 150ms;
+  }
+
+  .stagger-children>*:nth-child(5) {
+    animation-delay: 200ms;
+  }
+
+  .stagger-children>*:nth-child(6) {
+    animation-delay: 250ms;
+  }
+
+  .stagger-children>*:nth-child(7) {
+    animation-delay: 300ms;
+  }
+
+  .stagger-children>*:nth-child(8) {
+    animation-delay: 350ms;
+  }
 
   /* Pulse glow */
   .pulse-glow {
@@ -238,9 +244,12 @@
   }
 
   @keyframes pulseGlow {
-    0%, 100% {
+
+    0%,
+    100% {
       box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
     }
+
     50% {
       box-shadow: 0 0 20px 5px hsl(var(--primary) / 0.2);
     }
@@ -256,6 +265,7 @@
       opacity: 0;
       transform: translateY(30px) scale(0.95);
     }
+
     to {
       opacity: 1;
       transform: translateY(0) scale(1);

@@ -1,19 +1,145 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Brain, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2, Target, Trophy } from 'lucide-react';
 import { CurriculumTree } from '@/components/curriculum/CurriculumTree';
 import { useCurriculum } from '@/hooks/useCurriculum';
+import { RevisionModal } from '@/components/revision/RevisionModal';
+import { api } from '@/lib/api';
+import { createOrGetUser } from '@/logic/userSession';
+import { useUser } from '@clerk/clerk-react';
 import type { Module, Subtopic } from '@/types/curriculum';
+import { OrbitLogo } from '@/components/brand/OrbitLogo';
+import { useAccessibilityModeOptional } from '@/context/AccessibilityModeContext';
 
 export default function CurriculumPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const curriculumId = searchParams.get('id') || undefined;
   const { data, isLoading, error } = useCurriculum(curriculumId);
+  const { user, isLoaded } = useUser();
+  const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
+  const accessibility = useAccessibilityModeOptional();
+
+  const modules: Module[] = data?.modules || [];
+  const allSubtopics = modules.flatMap((m: Module) => m.subtopics);
+  const completedSubtopics = allSubtopics.filter((s: Subtopic) => s.status === 'completed');
+  const isFullyComplete = allSubtopics.length > 0 && completedSubtopics.length === allSubtopics.length;
+  const completionPercentage = allSubtopics.length > 0
+    ? Math.round((completedSubtopics.length / allSubtopics.length) * 100)
+    : 0;
+  const firstAvailableSubtopic: Subtopic | undefined = modules
+    .flatMap((m: Module) => m.subtopics)
+    .find((s: Subtopic) => s.status !== 'completed');
+
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [revisionMilestone, setRevisionMilestone] = useState<number | null>(null);
+  const [milestoneReady, setMilestoneReady] = useState(false);
+  const [hasAnnounced, setHasAnnounced] = useState(false);
+
+  useEffect(() => {
+    if (data?.curriculum_id && uid) {
+      api.checkRevisionMilestone(uid, data.curriculum_id).then(result => {
+        if (result.ready && result.milestone) {
+          setRevisionMilestone(result.milestone);
+          setMilestoneReady(true);
+
+          const cacheKey = `revision_${uid}_${data.curriculum_id}_${result.milestone}`;
+          if (localStorage.getItem(cacheKey)) {
+            setRevisionModalOpen(true);
+          }
+        }
+      }).catch(console.error);
+    }
+  }, [data?.curriculum_id, uid]);
+
+  useEffect(() => {
+    return () => {
+      accessibility?.stop?.();
+    };
+  }, [accessibility]);
 
   const handleStartLesson = (subtopicId: string) => {
-    navigate(`/learn/${subtopicId}`);
+    accessibility?.stop?.();
+    if (data?.curriculum_id) {
+      navigate(`/learn/${subtopicId}?id=${data.curriculum_id}`);
+    } else {
+      navigate(`/learn/${subtopicId}`);
+    }
   };
+
+  const handleOpenRevision = () => {
+    setRevisionModalOpen(true);
+  };
+
+
+  // Auto-announce status when page loads in voice mode
+  useEffect(() => {
+    if (accessibility?.isOn && !isLoading && data && !hasAnnounced) {
+      setHasAnnounced(true);
+      const percent = completionPercentage;
+      const title = data.title || 'your curriculum';
+      let message = `Welcome to ${title}. You are ${percent}% complete.`;
+
+      if (milestoneReady && revisionMilestone) {
+        message += ` You have reached a ${revisionMilestone}% milestone! Say 'start revision' to take the test.`;
+      } else if (firstAvailableSubtopic) {
+        message += " Say 'start studying' to continue.";
+      }
+
+      accessibility.speak(message);
+    }
+  }, [accessibility?.isOn, isLoading, data, hasAnnounced, completionPercentage, milestoneReady, revisionMilestone, firstAvailableSubtopic, accessibility]);
+
+  // Command handler
+  useEffect(() => {
+    if (!accessibility?.isOn) return;
+
+    const handleCommand = (text: string) => {
+      const lower = text.toLowerCase();
+
+      if ((lower.includes('start') && lower.includes('stud')) ||
+        lower.includes('begin') ||
+        (lower.includes('continue') && !lower.includes('revision'))) {
+        if (firstAvailableSubtopic) {
+          accessibility.speak('Starting lesson');
+          handleStartLesson(firstAvailableSubtopic.id);
+          return true;
+        } else {
+          accessibility.speak('All lessons completed. You can start revision if available.');
+          return true;
+        }
+      }
+
+      if (lower.includes('revision') || lower.includes('test') || lower.includes('review') || lower.includes('quiz')) {
+        if (milestoneReady && revisionMilestone) {
+          accessibility.speak(`Starting ${revisionMilestone}% revision`);
+          handleOpenRevision();
+          return true;
+        } else {
+          accessibility.speak('No revision available yet. Complete more lessons first.');
+          return true;
+        }
+      }
+
+      if (lower.includes('home') || lower.includes('back')) {
+        accessibility.speak('Going back');
+        navigate('/');
+        return true;
+      }
+
+      if (lower.includes('progress') || lower.includes('status')) {
+        const message = `You are ${completionPercentage}% complete.`;
+        accessibility.speak(message);
+        return true;
+      }
+
+      return false;
+    };
+
+    accessibility.setCommandHandler(handleCommand);
+    return () => accessibility.setCommandHandler(null);
+  }, [accessibility, data, firstAvailableSubtopic, milestoneReady, revisionMilestone, completionPercentage, navigate]);
 
   if (isLoading) {
     return (
@@ -43,41 +169,86 @@ export default function CurriculumPage() {
     );
   }
 
-  const modules: Module[] = data?.modules || [];
-  const firstAvailableSubtopic: Subtopic | undefined = modules
-    .flatMap((m: Module) => m.subtopics)
-    .find((s: Subtopic) => s.status !== 'completed');
-
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Brain className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-foreground">ORBIT</span>
-          </div>
+          <OrbitLogo size="sm" />
         </div>
       </header>
 
       <main className="container mx-auto px-6 py-8 max-w-4xl">
+        {milestoneReady && revisionMilestone && data?.curriculum_id && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-gradient-to-r from-primary/20 to-cyan-500/20 border border-primary/30 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/30 flex items-center justify-center">
+                {revisionMilestone === 100 ? <Trophy className="w-5 h-5 text-primary" /> : <Target className="w-5 h-5 text-primary" />}
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {revisionMilestone === 100 ? 'Final Test Ready!' : `${revisionMilestone}% Milestone Reached!`}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {revisionMilestone === 100 ? 'Complete your final comprehensive test' : 'Review weak topics and test your knowledge'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenRevision}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+            >
+              {revisionMilestone === 100 ? 'Take Final Test' : 'Start Revision'}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
         {modules.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8 p-6 rounded-2xl bg-accent/50 border border-primary/20"
+            className={`mb-8 p-6 rounded-2xl border ${isFullyComplete
+              ? 'bg-complete/10 border-complete/30'
+              : 'bg-accent/50 border-primary/20'
+              }`}
           >
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
-                <Brain className="w-6 h-6 text-primary" />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isFullyComplete
+                ? 'bg-complete/20'
+                : 'bg-primary/20'
+                }`}>
+                {isFullyComplete ? (
+                  <svg className="w-6 h-6 text-complete" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                )}
               </div>
               <div className="flex-1">
-                <h2 className="font-medium text-foreground mb-1">Your learning path is ready</h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  The AI has analyzed your materials and created a structured curriculum.
-                  Topics are unlocked as you progress.
-                </p>
+                {isFullyComplete ? (
+                  <>
+                    <h2 className="font-medium text-complete mb-1">🎉 Congratulations!</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You've completed all {allSubtopics.length} lessons in this curriculum.
+                      Amazing work! Feel free to review any topic or upload new materials to continue learning.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="font-medium text-foreground mb-1">Ready to learn?</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Your study materials have been organized into {modules.length} module{modules.length !== 1 ? 's' : ''} with {allSubtopics.length} lesson{allSubtopics.length !== 1 ? 's' : ''}.
+                      {completionPercentage > 0 && ` You're ${completionPercentage}% complete!`}
+                    </p>
+                  </>
+                )}
                 {firstAvailableSubtopic && (
                   <button
                     onClick={() => handleStartLesson(firstAvailableSubtopic.id)}
@@ -97,6 +268,17 @@ export default function CurriculumPage() {
           onStartLesson={handleStartLesson}
         />
       </main>
+
+      {data?.curriculum_id && revisionMilestone && (
+        <RevisionModal
+          isOpen={revisionModalOpen}
+          onClose={() => setRevisionModalOpen(false)}
+          userId={uid}
+          curriculumId={data.curriculum_id}
+          milestone={revisionMilestone}
+        />
+      )}
     </div>
   );
 }
+
