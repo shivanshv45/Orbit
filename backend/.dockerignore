@@ -1,0 +1,10 @@
+# Ignore these during upload
+.venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+tts_cache/
+database.db
+*.db
+tests/
