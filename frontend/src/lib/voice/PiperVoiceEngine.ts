@@ -1,7 +1,7 @@
 import type { VoicePreferences } from '@/types/voice';
 import { loadVoicePreferences, validatePreferences, updateVoicePreferences } from './VoicePreferences';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const VOICE_CACHE_BASE = '/voice_cache';
 
 let manifest: Record<string, string> = {};
@@ -30,6 +30,9 @@ export class PiperVoiceEngine {
     private activeGeneration = 0;
     private audioContext: AudioContext | null = null;
     private audioUnlocked = false;
+    private backendFailures = 0;
+    private useBrowserFallback = false;
+    private currentUtterance: SpeechSynthesisUtterance | null = null;
 
     private recognition: any = null;
     private hasProcessedResult = false;
@@ -206,6 +209,11 @@ export class PiperVoiceEngine {
             }
         }
 
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        this.currentUtterance = null;
+
         this.isSpeaking = false;
         this.onSpeakingChange?.(false);
     }
@@ -340,11 +348,24 @@ export class PiperVoiceEngine {
         }
 
         try {
-            const audioUrl = await this.getAudioUrl(text);
-            if (!audioUrl) {
-                console.log('🔊 playText aborted: no url');
+            if (this.useBrowserFallback) {
+                await this.playWithBrowserTTS(text, gen);
                 return;
             }
+
+            const audioUrl = await this.getAudioUrl(text);
+            if (!audioUrl) {
+                console.log('🔊 Piper failed, using browser TTS fallback');
+                this.backendFailures++;
+                if (this.backendFailures >= 3) {
+                    console.log('🔊 Too many failures, switching to browser TTS mode');
+                    this.useBrowserFallback = true;
+                }
+                await this.playWithBrowserTTS(text, gen);
+                return;
+            }
+
+            this.backendFailures = 0;
 
             if (this.stopGeneration !== gen) {
                 console.log('🔊 playText aborted: gen changed after fetch');
@@ -368,7 +389,8 @@ export class PiperVoiceEngine {
                 this.currentAudio = audio;
                 console.log('🔊 audio playing, duration:', audio.duration);
             } catch (e: any) {
-                console.log('🔊 play() error:', e.name, e.message);
+                console.log('🔊 play() error, falling back to browser TTS:', e.name, e.message);
+                await this.playWithBrowserTTS(text, gen);
                 return;
             }
 
@@ -407,8 +429,62 @@ export class PiperVoiceEngine {
 
             console.log('🔊 playText complete for:', text.substring(0, 20));
         } catch (e) {
-            console.error('Error in playText:', e);
+            console.error('Error in playText, using browser fallback:', e);
+            await this.playWithBrowserTTS(text, gen);
         }
+    }
+
+    private async playWithBrowserTTS(text: string, gen: number): Promise<void> {
+        if (!('speechSynthesis' in window)) {
+            console.warn('🔊 Browser TTS not supported');
+            return;
+        }
+
+        if (this.stopGeneration !== gen) {
+            return;
+        }
+
+        return new Promise<void>((resolve) => {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = this.preferences?.rate || 1;
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            utterance.lang = 'en-US';
+
+            this.currentUtterance = utterance;
+
+            utterance.onend = () => {
+                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
+                this.currentUtterance = null;
+                resolve();
+            };
+
+            utterance.onerror = (e) => {
+                console.error('🔊 Browser TTS error:', e);
+                this.currentUtterance = null;
+                resolve();
+            };
+
+            const checkCancel = setInterval(() => {
+                if (this.stopGeneration !== gen) {
+                    console.log('🔊 Browser TTS cancelled');
+                    clearInterval(checkCancel);
+                    window.speechSynthesis.cancel();
+                    this.currentUtterance = null;
+                    resolve();
+                }
+            }, 100);
+
+            utterance.onend = () => {
+                clearInterval(checkCancel);
+                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
+                this.currentUtterance = null;
+                resolve();
+            };
+
+            console.log('🔊 Using browser TTS for:', text.substring(0, 40));
+            window.speechSynthesis.speak(utterance);
+        });
     }
 
     private async getAudioUrl(text: string): Promise<string | null> {
