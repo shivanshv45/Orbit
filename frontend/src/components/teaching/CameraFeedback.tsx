@@ -20,15 +20,15 @@ export function CameraFeedback({ metrics, expanded = false }: CameraFeedbackProp
         ((100 - metrics.confusion_level) * 0.2)
     );
 
-
-    const color = score > 75 ? 'text-green-500' : score > 40 ? 'text-yellow-500' : 'text-red-500';
-    const bgColor = score > 75 ? 'bg-green-500' : score > 40 ? 'bg-yellow-500' : 'bg-red-500';
-    const borderColor = score > 75 ? 'border-green-500/20' : score > 40 ? 'border-yellow-500/20' : 'border-red-500/20';
+    const color = score > 70 ? 'text-green-500' : score > 45 ? 'text-yellow-500' : 'text-red-500';
+    const bgColor = score > 70 ? 'bg-green-500' : score > 45 ? 'bg-yellow-500' : 'bg-red-500';
+    const borderColor = score > 70 ? 'border-green-500/20' : score > 45 ? 'border-yellow-500/20' : 'border-red-500/20';
 
     const getStatus = (s: number) => {
-        if (s > 85) return 'Deep Focus 🧠';
-        if (s > 70) return 'Engaged ✨';
-        if (s > 50) return 'Tracking...';
+        if (s === 0) return 'Looking for face... 👀';
+        if (s > 80) return 'Deep Focus 🧠';
+        if (s > 60) return 'Engaged ✨';
+        if (s > 45) return 'Attentive 👁️';
         return 'Distracted 😴';
     };
 
