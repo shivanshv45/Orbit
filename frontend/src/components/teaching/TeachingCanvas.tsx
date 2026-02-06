@@ -82,13 +82,7 @@ export function TeachingCanvas({
     if (texts.length > 0) {
       speakAll(texts);
     }
-
-    const nextIdx = currentChunkIndex + 1;
-    if (nextIdx < blocks.length) {
-      const nextScripts = converterRef.current.convertBlock(blocks[nextIdx], nextIdx, blocks.length);
-      prefetch(nextScripts.map(s => s.text));
-    }
-  }, [isOn, blocks, currentChunkIndex, speakAll, prefetch]);
+  }, [isOn, blocks, currentChunkIndex, speakAll]);
 
   useEffect(() => {
     speakCurrentBlockRef.current = speakCurrentBlock;
@@ -97,6 +91,29 @@ export function TeachingCanvas({
   useEffect(() => {
     registerBlockSpeaker(() => speakCurrentBlockRef.current());
   }, [registerBlockSpeaker]);
+
+  // Optimized: Prefetch ALL blocks in the current lesson at once
+  useEffect(() => {
+    if (!blocks || blocks.length <= 1) return;
+
+    // Small delay to let the first block start speaking first (priority)
+    const timer = setTimeout(() => {
+      const allTexts: string[] = [];
+      // Skip index 0 as it's likely spoken immediately
+      // Start from index 1 to end
+      for (let i = 1; i < blocks.length; i++) {
+        const scripts = converterRef.current.convertBlock(blocks[i], i, blocks.length);
+        scripts.forEach(s => s.text && allTexts.push(s.text));
+      }
+
+      if (allTexts.length > 0) {
+        console.log('🚀 Prefetching entire lesson voice content:', allTexts.length, 'utterances');
+        prefetch(allTexts);
+      }
+    }, 2000); // Wait 2s to allow initial speak to grab network first
+
+    return () => clearTimeout(timer);
+  }, [blocks, subtopicId, prefetch]);
 
   useEffect(() => {
     if (!isOn || !subtopicId || blocks.length === 0) {
@@ -148,6 +165,19 @@ export function TeachingCanvas({
     let score = attemptCount === 1 ? 1.0 : attemptCount === 2 ? 0.75 : attemptCount === 3 ? 0.5 : 0.25;
     setQuestionScores(prev => ({ ...prev, [index]: score }));
     if (isOn) speak(attemptCount === 1 ? 'Correct! Great job!' : 'Correct! Say next to continue.');
+  };
+
+  const handleQuestionWrong = (_index: number, attemptCount: number, hint?: string) => {
+    if (!isOn) return;
+
+    if (attemptCount < 4) {
+      // Still have attempts left - encourage retry with hint
+      const hintText = hint ? `Here's a hint: ${hint}` : '';
+      speak(`Not quite right. ${hintText} Say try again or click the button to retry.`);
+    } else {
+      // Out of attempts
+      speak('Not quite right. The correct answer has been revealed.');
+    }
   };
 
   const handleCommand = useCallback((text: string): boolean => {
@@ -405,7 +435,14 @@ export function TeachingCanvas({
           {visibleBlocks.map((block, index) => (
             <motion.div key={`${subtopicId}-${index}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index === currentChunkIndex ? 0.1 : 0 }} className="relative" onMouseEnter={() => setHoveredBlock(index)} onMouseLeave={() => setHoveredBlock(null)}>
               <div className={cn("transition-opacity duration-300", index < currentChunkIndex ? "opacity-60 hover:opacity-100" : "opacity-100")}>
-                {block.type === 'question' ? <QuestionBlock question={block} subtopicId={subtopicId} onCorrect={(count) => handleQuestionCorrect(index, count)} /> : renderBlock(block)}
+                {block.type === 'question' ? (
+                  <QuestionBlock
+                    question={block}
+                    subtopicId={subtopicId}
+                    onCorrect={(count) => handleQuestionCorrect(index, count)}
+                    onWrongAnswer={(count, hint) => handleQuestionWrong(index, count, hint)}
+                  />
+                ) : renderBlock(block)}
               </div>
               {(index === currentChunkIndex || hoveredBlock === index) && block.type !== 'question' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="mt-3">

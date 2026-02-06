@@ -201,23 +201,40 @@ export class VoiceContentConverter {
         return scripts;
     }
 
-    public convertFeedback(isCorrect: boolean, explanation: string, correctAnswer?: string): VoiceScript[] {
+    public convertFeedback(isCorrect: boolean, explanation: string, correctAnswer?: string, hint?: string, attemptCount?: number): VoiceScript[] {
         const scripts: VoiceScript[] = [];
 
         if (isCorrect) {
-            scripts.push({ text: 'Correct! Great job!', pauseAfter: 500 });
+            if (attemptCount === 1) {
+                scripts.push({ text: 'Correct on your first try! Excellent!', pauseAfter: 500 });
+            } else {
+                scripts.push({ text: 'Correct! Great job!', pauseAfter: 500 });
+            }
+            if (explanation) {
+                scripts.push({ text: this.cleanMarkdown(explanation), pauseAfter: 500 });
+            }
+            scripts.push({ text: 'Say next to continue.', pauseAfter: 300 });
         } else {
-            scripts.push({ text: 'Not quite right.', pauseAfter: 300 });
-            if (correctAnswer) {
-                scripts.push({ text: `The correct answer was ${correctAnswer}.`, pauseAfter: 400 });
+            // Wrong answer - provide helpful feedback
+            scripts.push({ text: 'Not quite right.', pauseAfter: 400 });
+
+            if (attemptCount && attemptCount < 4) {
+                // Still have attempts left
+                if (hint && attemptCount >= 1) {
+                    scripts.push({ text: `Here's a hint: ${this.cleanMarkdown(hint)}`, pauseAfter: 500 });
+                }
+                scripts.push({ text: 'Say try again to attempt the question again, or say next to continue.', pauseAfter: 400 });
+            } else {
+                // Out of attempts - reveal correct answer
+                if (correctAnswer) {
+                    scripts.push({ text: `The correct answer was ${correctAnswer}.`, pauseAfter: 400 });
+                }
+                if (explanation) {
+                    scripts.push({ text: this.cleanMarkdown(explanation), pauseAfter: 500 });
+                }
+                scripts.push({ text: 'Say next to continue.', pauseAfter: 300 });
             }
         }
-
-        if (explanation) {
-            scripts.push({ text: this.cleanMarkdown(explanation), pauseAfter: 500 });
-        }
-
-        scripts.push({ text: 'Say next to continue.', pauseAfter: 300 });
 
         return scripts;
     }

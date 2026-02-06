@@ -24,9 +24,10 @@ interface QuestionBlockProps {
     question: QuestionType;
     subtopicId: string;
     onCorrect: (attemptCount: number) => void;
+    onWrongAnswer?: (attemptCount: number, hint?: string) => void;
 }
 
-export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlockProps) {
+export function QuestionBlock({ question, subtopicId: _subtopicId, onCorrect, onWrongAnswer }: QuestionBlockProps) {
     const [selectedAnswer, setSelectedAnswer] = useState<number | string | null>(null);
     const [fillInAnswer, setFillInAnswer] = useState('');
     const [attemptCount, setAttemptCount] = useState(0);
@@ -67,6 +68,11 @@ export function QuestionBlock({ question, subtopicId, onCorrect }: QuestionBlock
             setTimeout(() => {
                 onCorrect(newAttemptCount);
             }, 300);
+        } else {
+            // Notify parent about wrong answer for voice feedback
+            if (onWrongAnswer) {
+                onWrongAnswer(newAttemptCount, question.hint);
+            }
         }
     };
 

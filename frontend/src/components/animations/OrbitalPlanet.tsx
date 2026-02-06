@@ -15,10 +15,8 @@ interface Asteroid {
 }
 
 export function OrbitalPlanet({ scrollProgress }: OrbitalPlanetProps) {
-    // Create orbital path - a smooth curved path from top to bottom
     const pathD = 'M 100 50 Q 50 200, 100 350 T 100 650';
 
-    // Generate asteroid particles
     const asteroids: Asteroid[] = useMemo(() => {
         return Array.from({ length: 12 }, (_, i) => ({
             id: i,
@@ -60,7 +58,6 @@ export function OrbitalPlanet({ scrollProgress }: OrbitalPlanetProps) {
                 </defs>
             </svg>
 
-            {/* Animated planet following the path */}
             <motion.div
                 className="absolute w-16 h-16"
                 style={{
@@ -70,25 +67,18 @@ export function OrbitalPlanet({ scrollProgress }: OrbitalPlanetProps) {
                     y: useTransform(scrollProgress, [0, 1], [0, -20]),
                 }}
             >
-                {/* Planet with glow effect */}
                 <div className="relative w-16 h-16">
-                    {/* Outer glow */}
                     <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-150" />
 
-                    {/* Planet body */}
                     <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/80 to-primary overflow-hidden">
-                        {/* Surface details */}
                         <div className="absolute inset-0 opacity-30">
                             <div className="absolute top-2 right-3 w-4 h-4 rounded-full bg-primary-foreground/20" />
                             <div className="absolute bottom-3 left-2 w-3 h-3 rounded-full bg-primary-foreground/15" />
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary-foreground/10" />
                         </div>
-
-                        {/* Shine effect */}
                         <div className="absolute top-2 left-3 w-6 h-6 rounded-full bg-white/40 blur-md" />
                     </div>
 
-                    {/* Orbital rings (fake 3D) */}
                     <motion.div
                         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-8 border-2 border-primary/40 rounded-full"
                         style={{
@@ -107,7 +97,6 @@ export function OrbitalPlanet({ scrollProgress }: OrbitalPlanetProps) {
                 </div>
             </motion.div>
 
-            {/* Floating asteroids */}
             {asteroids.map((asteroid) => (
                 <motion.div
                     key={asteroid.id}
