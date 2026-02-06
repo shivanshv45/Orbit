@@ -1,5 +1,6 @@
 import type { VoicePreferences } from '@/types/voice';
 import { loadVoicePreferences, validatePreferences, updateVoicePreferences } from './VoicePreferences';
+import { audioCacheDB } from './AudioCache';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const VOICE_CACHE_BASE = '/voice_cache';
@@ -452,35 +453,36 @@ export class PiperVoiceEngine {
             utterance.lang = 'en-US';
 
             this.currentUtterance = utterance;
+            let resolved = false;
 
-            utterance.onend = () => {
-                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
+            const cleanup = () => {
+                if (resolved) return;
+                resolved = true;
+                clearInterval(checkCancel);
                 this.currentUtterance = null;
                 resolve();
             };
 
-            utterance.onerror = (e) => {
-                console.error('🔊 Browser TTS error:', e);
-                this.currentUtterance = null;
-                resolve();
+            utterance.onend = () => {
+                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
+                cleanup();
+            };
+
+            utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
+                // Only log non-expected errors (interrupted/canceled are expected during cancellation)
+                if (e.error !== 'interrupted' && e.error !== 'canceled') {
+                    console.error('🔊 Browser TTS error:', e.error);
+                }
+                cleanup();
             };
 
             const checkCancel = setInterval(() => {
                 if (this.stopGeneration !== gen) {
                     console.log('🔊 Browser TTS cancelled');
-                    clearInterval(checkCancel);
                     window.speechSynthesis.cancel();
-                    this.currentUtterance = null;
-                    resolve();
+                    cleanup();
                 }
             }, 100);
-
-            utterance.onend = () => {
-                clearInterval(checkCancel);
-                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
-                this.currentUtterance = null;
-                resolve();
-            };
 
             console.log('🔊 Using browser TTS for:', text.substring(0, 40));
             window.speechSynthesis.speak(utterance);
@@ -496,6 +498,18 @@ export class PiperVoiceEngine {
 
         if (this.pendingFetches.has(key)) {
             return this.pendingFetches.get(key)!;
+        }
+
+        // Check IndexedDB persistent cache
+        try {
+            const cachedBlob = await audioCacheDB.get(key);
+            if (cachedBlob) {
+                const url = URL.createObjectURL(cachedBlob);
+                this.audioCache.set(key, url);
+                return url;
+            }
+        } catch (e) {
+            console.warn('Failed to read from audio DB', e);
         }
 
         const staticFile = manifest[key];
@@ -525,6 +539,9 @@ export class PiperVoiceEngine {
             if (res.ok) {
                 const blob = await res.blob();
                 if (blob.size > 100) {
+                    // Save to persistent cache
+                    audioCacheDB.set(key, blob).catch(e => console.warn('Cache write failed', e));
+
                     const url = URL.createObjectURL(blob);
                     this.audioCache.set(key, url);
                     return url;
@@ -535,13 +552,22 @@ export class PiperVoiceEngine {
         return null;
     }
 
-    public prefetch(texts: string[]): void {
-        texts.forEach(text => {
-            const key = text.toLowerCase().trim();
-            if (!this.audioCache.has(key) && !this.pendingFetches.has(key)) {
-                this.getAudioUrl(text);
-            }
-        });
+    public async prefetch(texts: string[]): Promise<void> {
+        const uniqueTexts = [...new Set(texts.filter(t => t?.trim()))];
+        const CONCURRENT_LIMIT = 3;
+
+        for (let i = 0; i < uniqueTexts.length; i += CONCURRENT_LIMIT) {
+            const batch = uniqueTexts.slice(i, i + CONCURRENT_LIMIT);
+            await Promise.all(batch.map(text => {
+                const key = text.toLowerCase().trim();
+                if (!this.audioCache.has(key) && !this.pendingFetches.has(key)) {
+                    return this.getAudioUrl(text);
+                }
+                return Promise.resolve();
+            }));
+            // Small delay between batches to yield to main thread
+            await new Promise(r => setTimeout(r, 50));
+        }
     }
 
     public updatePreferences(prefs: Partial<VoicePreferences>): void {

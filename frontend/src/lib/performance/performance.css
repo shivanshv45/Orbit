@@ -1,0 +1,167 @@
+:root {
+    --animation-duration-multiplier: 1;
+    --blur-enabled: 1;
+    --shadow-enabled: 1;
+    --duration-fast: calc(150ms * var(--animation-duration-multiplier));
+    --duration-normal: calc(300ms * var(--animation-duration-multiplier));
+    --duration-slow: calc(500ms * var(--animation-duration-multiplier));
+}
+
+/* High - all effects */
+.perf-high {
+    --animation-duration-multiplier: 1;
+}
+
+/* Medium - optimized complex effects only */
+.perf-medium {
+    --animation-duration-multiplier: 1;
+    /* Normal speed now */
+}
+
+/* Parallax disabled in medium for performance optimization */
+.perf-medium .parallax-element {
+    transform: none !important;
+}
+
+/* Low - minimal effects */
+.perf-low {
+    --animation-duration-multiplier: 0.5;
+    --blur-enabled: 0;
+    --shadow-enabled: 0;
+}
+
+.perf-low .backdrop-blur,
+.perf-low .backdrop-blur-sm,
+.perf-low .backdrop-blur-md,
+.perf-low .backdrop-blur-lg,
+.perf-low .backdrop-blur-xl,
+.perf-low [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.perf-low .blur,
+.perf-low .blur-sm,
+.perf-low .blur-md,
+.perf-low .blur-lg,
+.perf-low [class*="blur-"] {
+    filter: none !important;
+}
+
+.perf-low .glass-effect,
+.perf-low .glassmorphism {
+    backdrop-filter: none !important;
+    background-color: hsl(var(--background) / 0.95) !important;
+}
+
+.perf-low .shadow,
+.perf-low .shadow-sm,
+.perf-low .shadow-md,
+.perf-low .shadow-lg,
+.perf-low .shadow-xl,
+.perf-low .shadow-2xl,
+.perf-low [class*="shadow-"] {
+    box-shadow: none !important;
+}
+
+.perf-low * {
+    transition-duration: calc(var(--duration-normal)) !important;
+    transition-timing-function: ease-out !important;
+}
+
+.perf-low .parallax-element {
+    transform: none !important;
+}
+
+.perf-low [class*="gradient"] {
+    background-image: none !important;
+}
+
+/* Minimal - no effects/animations */
+.perf-minimal {
+    --animation-duration-multiplier: 0;
+}
+
+.perf-minimal,
+.perf-minimal *,
+.perf-minimal *::before,
+.perf-minimal *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+.perf-minimal [class*="blur"],
+.perf-minimal [class*="shadow"],
+.perf-minimal [class*="gradient"],
+.perf-minimal [class*="glow"] {
+    filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+
+/* Conditional display utilities */
+.perf-high-only {
+    display: block;
+}
+
+/* In medium, most things are visible */
+.perf-low .perf-high-only,
+.perf-minimal .perf-high-only {
+    display: none !important;
+}
+
+.perf-medium-only {
+    display: block;
+}
+
+.perf-low .perf-medium-only,
+.perf-minimal .perf-medium-only {
+    display: none !important;
+}
+
+.perf-low .perf-hide-low,
+.perf-minimal .perf-hide-low {
+    display: none !important;
+}
+
+.perf-simple-fallback {
+    display: none;
+}
+
+.perf-low .perf-simple-fallback,
+.perf-minimal .perf-simple-fallback {
+    display: block !important;
+}
+
+/* Adaptive effects with fallbacks */
+.adaptive-blur {
+    backdrop-filter: blur(12px);
+    background-color: hsl(var(--background) / 0.7);
+}
+
+.perf-low .adaptive-blur,
+.perf-minimal .adaptive-blur {
+    backdrop-filter: none;
+    background-color: hsl(var(--background) / 0.95);
+}
+
+.adaptive-shadow {
+    box-shadow: 0 4px 20px -4px hsl(var(--foreground) / 0.15);
+}
+
+.perf-low .adaptive-shadow,
+.perf-minimal .adaptive-shadow {
+    box-shadow: none;
+    border: 1px solid hsl(var(--border));
+}
+
+.adaptive-glow {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+}
+
+/* Disabled only in low/minimal, enabled in medium */
+.perf-low .adaptive-glow,
+.perf-minimal .adaptive-glow {
+    box-shadow: none;
+}

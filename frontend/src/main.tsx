@@ -1,10 +1,12 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import '@/lib/performance/performance.css'
 import App from './App.tsx'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { initializeUser } from './logic/userSession'
 import { ClerkProvider } from '@clerk/clerk-react'
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
