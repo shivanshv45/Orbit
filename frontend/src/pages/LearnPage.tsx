@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Video, VideoOff, Menu, X } from 'lucide-react';
+import { Loader2, Video, VideoOff, Menu, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CameraFeedback } from '@/components/teaching/CameraFeedback';
 import { TopicNavigator } from '@/components/layout/TopicNavigator';
@@ -23,6 +23,7 @@ export default function LearnPage() {
   const [currentSubtopicId, setCurrentSubtopicId] = useState(subtopicId || '');
   const [progressPanelOpen, setProgressPanelOpen] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [showMetricsPanel, setShowMetricsPanel] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, isLoaded } = useUser();
   const { uid } = createOrGetUser(user ? { id: user.id, fullName: user.fullName } : null, isLoaded);
@@ -279,7 +280,7 @@ export default function LearnPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative w-full">
         {/* Camera & Voice Toggle - Fixed Below Sidebar Toggle */}
-        <div className="fixed top-4 md:top-16 right-4 z-40 flex flex-col items-end gap-3">
+        <div className="fixed top-4 md:top-16 right-4 z-40 flex flex-col items-end gap-2">
           <button
             onClick={() => setCameraEnabled(!cameraEnabled)}
             className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 shadow-sm hover:shadow-md"
@@ -292,9 +293,32 @@ export default function LearnPage() {
             )}
           </button>
 
-          {cameraEnabled && cameraActive && currentMetrics && (
-            <CameraFeedback metrics={currentMetrics} expanded={true} />
+          {cameraEnabled && cameraActive && (
+            <button
+              onClick={() => setShowMetricsPanel(!showMetricsPanel)}
+              className="p-1.5 rounded-lg bg-background/80 border border-border/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 shadow-sm"
+              title={showMetricsPanel ? "Hide Metrics" : "Show Metrics"}
+            >
+              {showMetricsPanel ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
           )}
+
+          <AnimatePresence>
+            {cameraEnabled && cameraActive && currentMetrics && showMetricsPanel && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CameraFeedback metrics={currentMetrics} expanded={true} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="max-w-3xl mx-auto p-4 md:p-8 pt-14 md:pt-16 pr-4 md:pr-16">
