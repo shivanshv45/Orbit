@@ -14,7 +14,7 @@ from services.Gemini_Services.teaching_prompt import teachingPrompt
 from services.Gemini_Services.key_manager import key_manager
 from services.db_services.db import get_session
 
-GENERATED_DIR = Path(r"c:\Users\shivanshverma\Desktop\Orbit\frontend\public\generated")
+GENERATED_DIR = Path(os.environ.get("GENERATED_DIR", "/tmp/generated"))
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 class Paragraph(BaseModel):
