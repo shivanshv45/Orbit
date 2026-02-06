@@ -78,9 +78,8 @@ export function useFaceTracking(
 
 
                 const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-                const detectorConfig: faceLandmarksDetection.MediaPipeFaceMeshMediaPipeModelConfig = {
-                    runtime: 'mediapipe',
-                    solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
+                const detectorConfig: faceLandmarksDetection.MediaPipeFaceMeshTfjsModelConfig = {
+                    runtime: 'tfjs',
                     maxFaces: 1,
                     refineLandmarks: false,
                 };
