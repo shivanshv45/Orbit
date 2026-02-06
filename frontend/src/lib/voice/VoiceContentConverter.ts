@@ -20,7 +20,7 @@ export class VoiceContentConverter {
     public convertBlock(block: TeachingBlock, index: number, total: number): VoiceScript[] {
         const scripts: VoiceScript[] = [];
 
-        console.log('🎤 Converting block:', block.type, 'index:', index, 'block:', block);
+
 
         if (this.verbosity === 'detailed' && index === 0) {
             scripts.push({ text: `Starting lesson. There are ${total} sections.`, pauseAfter: 400 });
@@ -46,7 +46,7 @@ export class VoiceContentConverter {
                 scripts.push(...this.convertQuestion(block));
                 break;
             default:
-                console.log('🎤 Unknown block type:', (block as any).type);
+
         }
 
         if (index < total - 1) {
@@ -55,7 +55,7 @@ export class VoiceContentConverter {
             scripts.push({ text: 'This is the last section. Say next to complete the lesson.', pauseAfter: 300 });
         }
 
-        console.log('🎤 Generated scripts:', scripts.map(s => s.text.substring(0, 50)));
+
 
         return scripts;
     }

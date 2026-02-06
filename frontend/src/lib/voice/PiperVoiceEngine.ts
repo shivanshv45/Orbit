@@ -58,7 +58,7 @@ export class PiperVoiceEngine {
 
                 if (this.audioContext.state === 'suspended') {
                     this.audioContext.resume().then(() => {
-                        console.log('🔊 AudioContext resumed');
+
                         this.audioUnlocked = true;
                     });
                 } else {
@@ -71,7 +71,7 @@ export class PiperVoiceEngine {
                 source.connect(this.audioContext.destination);
                 source.start(0);
 
-                console.log('🔊 Audio unlocked via user interaction');
+
             };
 
             document.addEventListener('click', unlockAudio, { once: false });
@@ -100,7 +100,7 @@ export class PiperVoiceEngine {
                 this.isListening = true;
                 this.hasProcessedResult = false;
                 this.onListeningChange?.(true);
-                console.log('🎤 Listening...');
+
             };
 
             this.recognition.onresult = (e: any) => {
@@ -109,8 +109,7 @@ export class PiperVoiceEngine {
                 const result = e.results[0];
                 if (result) {
                     const transcript = result[0].transcript.trim();
-                    const confidence = result[0].confidence;
-                    console.log('✅ Heard:', transcript, `(${Math.round(confidence * 100)}%)`);
+
 
                     if (transcript && this.onResult) {
                         this.hasProcessedResult = true;
@@ -120,7 +119,7 @@ export class PiperVoiceEngine {
             };
 
             this.recognition.onerror = (e: any) => {
-                console.log('❌ Recognition error:', e.error);
+
                 if (e.error === 'network') {
                     this.speak('Check internet connection');
                 } else if (e.error === 'not-allowed') {
@@ -133,7 +132,7 @@ export class PiperVoiceEngine {
             };
 
             this.recognition.onend = () => {
-                console.log('🔇 Recognition ended');
+
                 this.isListening = false;
                 this.onListeningChange?.(false);
             };
@@ -177,9 +176,9 @@ export class PiperVoiceEngine {
             this.recognition.start();
         } catch (e: any) {
             if (e.message && e.message.includes('already started')) {
-                console.log('Recognition already running');
+
             } else {
-                console.log('Recognition start failed:', e);
+
             }
         }
     }
@@ -226,7 +225,7 @@ export class PiperVoiceEngine {
         const timeSinceLastSpeak = now - this.lastSpeakTime;
         this.lastSpeakTime = now;
 
-        console.log('🔊 speak() called:', text.substring(0, 50), 'interrupt:', interrupt);
+
 
         const gen = interrupt ? ++this.stopGeneration : this.stopGeneration;
 
@@ -252,7 +251,7 @@ export class PiperVoiceEngine {
                 this.isProcessingQueue = false;
                 this.processQueue();
             } else {
-                console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
+                // console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
             }
         }, delay);
     }
@@ -265,8 +264,7 @@ export class PiperVoiceEngine {
         const timeSinceLastSpeak = now - this.lastSpeakTime;
         this.lastSpeakTime = now;
 
-        console.log('🔊 speakMultiple() called:', filtered.length, 'items, timeSince:', timeSinceLastSpeak);
-        console.log('🔊 speakMultiple caller:', new Error().stack?.split('\n').slice(2, 5).join(' <- '));
+
 
         const gen = ++this.stopGeneration;
 
@@ -289,7 +287,7 @@ export class PiperVoiceEngine {
                 this.isProcessingQueue = false;
                 this.processQueue();
             } else {
-                console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
+                // console.log('🔊 queue skipped: gen mismatch', gen, this.stopGeneration);
             }
         }, delay);
     }
@@ -300,7 +298,7 @@ export class PiperVoiceEngine {
         const itemsToPlay = [...this.speechQueue];
         this.speechQueue = [];
 
-        console.log('🔊 processQueue() starting, items:', itemsToPlay.length);
+
 
         if (itemsToPlay.length === 0) {
             this.isSpeaking = false;
@@ -317,13 +315,13 @@ export class PiperVoiceEngine {
         try {
             for (const text of itemsToPlay) {
                 if (this.stopGeneration !== gen) {
-                    console.log('🔊 queue interrupted by new speak');
+                    // console.log('🔊 queue interrupted by new speak');
                     break;
                 }
-                console.log('🔊 playing:', text.substring(0, 40));
+
                 await this.playText(text);
             }
-            console.log('🔊 queue finished, gen match:', this.stopGeneration === gen);
+
         } catch (e) {
             console.error('Error processing speech queue:', e);
         } finally {
@@ -335,10 +333,10 @@ export class PiperVoiceEngine {
 
     private async playText(text: string): Promise<void> {
         const gen = this.activeGeneration;
-        console.log('🔊 playText() called:', text.substring(0, 40), 'gen:', gen);
+
 
         if (this.stopGeneration !== gen) {
-            console.log('🔊 playText() cancelled: gen mismatch');
+            // console.log('🔊 playText() cancelled: gen mismatch');
             return;
         }
 
@@ -356,10 +354,10 @@ export class PiperVoiceEngine {
 
             const audioUrl = await this.getAudioUrl(text);
             if (!audioUrl) {
-                console.log('🔊 Piper failed, using browser TTS fallback');
+
                 this.backendFailures++;
                 if (this.backendFailures >= 3) {
-                    console.log('🔊 Too many failures, switching to browser TTS mode');
+
                     this.useBrowserFallback = true;
                 }
                 await this.playWithBrowserTTS(text, gen);
@@ -369,7 +367,7 @@ export class PiperVoiceEngine {
             this.backendFailures = 0;
 
             if (this.stopGeneration !== gen) {
-                console.log('🔊 playText aborted: gen changed after fetch');
+
                 return;
             }
 
@@ -378,19 +376,19 @@ export class PiperVoiceEngine {
             audio.playbackRate = Math.max(0.1, Math.min(rate, 4.0));
 
             try {
-                console.log('🔊 starting audio.play()');
+
                 await audio.play();
 
                 if (this.stopGeneration !== gen) {
-                    console.log('🔊 gen changed after play started, stopping');
+
                     audio.pause();
                     return;
                 }
 
                 this.currentAudio = audio;
-                console.log('🔊 audio playing, duration:', audio.duration);
+
             } catch (e: any) {
-                console.log('🔊 play() error, falling back to browser TTS:', e.name, e.message);
+                // console.log('🔊 play() error, falling back to browser TTS:', e.name, e.message);
                 await this.playWithBrowserTTS(text, gen);
                 return;
             }
@@ -398,7 +396,7 @@ export class PiperVoiceEngine {
             await new Promise<void>((resolve) => {
                 const checkInterval = setInterval(() => {
                     if (this.stopGeneration !== gen) {
-                        console.log('🔊 audio cancelled by new speak');
+
                         clearInterval(checkInterval);
                         audio.pause();
                         if (this.currentAudio === audio) {
@@ -409,7 +407,7 @@ export class PiperVoiceEngine {
                     }
 
                     if (audio.ended) {
-                        console.log('🔊 audio finished (interval check)');
+
                         clearInterval(checkInterval);
                         if (this.currentAudio === audio) {
                             this.currentAudio = null;
@@ -419,7 +417,7 @@ export class PiperVoiceEngine {
                 }, 100);
 
                 audio.onended = () => {
-                    console.log('🔊 audio onended fired');
+
                     clearInterval(checkInterval);
                     if (this.currentAudio === audio) {
                         this.currentAudio = null;
@@ -428,7 +426,7 @@ export class PiperVoiceEngine {
                 };
             });
 
-            console.log('🔊 playText complete for:', text.substring(0, 20));
+
         } catch (e) {
             console.error('Error in playText, using browser fallback:', e);
             await this.playWithBrowserTTS(text, gen);
@@ -464,7 +462,7 @@ export class PiperVoiceEngine {
             };
 
             utterance.onend = () => {
-                console.log('🔊 Browser TTS finished:', text.substring(0, 20));
+
                 cleanup();
             };
 
@@ -478,13 +476,13 @@ export class PiperVoiceEngine {
 
             const checkCancel = setInterval(() => {
                 if (this.stopGeneration !== gen) {
-                    console.log('🔊 Browser TTS cancelled');
+
                     window.speechSynthesis.cancel();
                     cleanup();
                 }
             }, 100);
 
-            console.log('🔊 Using browser TTS for:', text.substring(0, 40));
+
             window.speechSynthesis.speak(utterance);
         });
     }

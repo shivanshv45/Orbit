@@ -50,17 +50,8 @@ export default function LearnPage() {
   }, [teachingData, urlCurriculumId]);
 
 
-  const { isActive: cameraActive, currentMetrics } = useFaceTracking(currentSubtopicId, cameraEnabled);
+  const { isActive: cameraActive, isLoading: cameraLoading, currentMetrics, error: cameraError } = useFaceTracking(currentSubtopicId, cameraEnabled);
 
-
-
-
-  // Log metrics for debugging
-  useEffect(() => {
-    if (cameraEnabled && currentMetrics) {
-      console.debug('[Camera Metrics]', currentMetrics);
-    }
-  }, [cameraEnabled, currentMetrics]);
 
 
   const calculateStreak = () => {
@@ -308,6 +299,18 @@ export default function LearnPage() {
           )}
 
           <AnimatePresence>
+            {cameraEnabled && cameraLoading && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-2 px-3 py-2 bg-background/80 border border-border/50 rounded-xl text-xs text-muted-foreground"
+              >
+                <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                Detecting your face...
+              </motion.div>
+            )}
             {cameraEnabled && cameraActive && currentMetrics && showMetricsPanel && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: -10 }}
@@ -316,6 +319,17 @@ export default function LearnPage() {
                 transition={{ duration: 0.2 }}
               >
                 <CameraFeedback metrics={currentMetrics} expanded={true} />
+              </motion.div>
+            )}
+            {cameraEnabled && cameraError && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="max-w-[200px] p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400"
+              >
+                {cameraError}
               </motion.div>
             )}
           </AnimatePresence>

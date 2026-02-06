@@ -16,7 +16,9 @@ interface SessionMetrics {
 
 interface FaceTrackingResult {
     isActive: boolean;
+    isLoading: boolean;
     currentMetrics: SessionMetrics | null;
+    error: string | null;
 }
 
 
@@ -26,7 +28,9 @@ export function useFaceTracking(
 ): FaceTrackingResult {
     const { uid } = createOrGetUser();
     const [isActive, setIsActive] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [currentMetrics, setCurrentMetrics] = useState<SessionMetrics | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const sessionRef = useRef({
         startTime: Date.now(),
@@ -56,7 +60,12 @@ export function useFaceTracking(
         let isMounted = true;
 
         async function startTracking() {
+            setIsLoading(true);
+            setError(null);
             try {
+                const tf = await import('@tensorflow/tfjs');
+                await tf.setBackend('webgl');
+                await tf.ready();
 
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { width: 640, height: 480, facingMode: 'user' }
@@ -76,55 +85,84 @@ export function useFaceTracking(
 
                 await video.play();
 
+                await new Promise<void>((resolve) => {
+                    if (video.readyState >= 2) {
+                        resolve();
+                    } else {
+                        video.onloadeddata = () => resolve();
+                    }
+                });
 
                 const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
                 const detectorConfig: faceLandmarksDetection.MediaPipeFaceMeshTfjsModelConfig = {
                     runtime: 'tfjs',
                     maxFaces: 1,
-                    refineLandmarks: false,
+                    refineLandmarks: true,
                 };
 
                 const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
                 sessionRef.current.detector = detector;
 
-                setIsActive(true);
-                sessionRef.current.isActive = true;
-                console.log('[Camera] Face tracking started');
 
+                setIsActive(true);
+                setIsLoading(false);
+                sessionRef.current.isActive = true;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                const ctx = canvas.getContext('2d')!;
+
+                let noFaceCount = 0;
+                let lastDetectionTime = 0;
 
                 const detectLoop = async () => {
                     if (!sessionRef.current.detector || !sessionRef.current.videoRef || !isMounted) return;
 
+                    const now = Date.now();
+                    if (now - lastDetectionTime < 50) {
+                        if (sessionRef.current.isActive && isMounted) {
+                            requestAnimationFrame(detectLoop);
+                        }
+                        return;
+                    }
+                    lastDetectionTime = now;
+
                     try {
-                        const faces = await sessionRef.current.detector.estimateFaces(
-                            sessionRef.current.videoRef,
-                            { flipHorizontal: false }
-                        );
+                        ctx.drawImage(sessionRef.current.videoRef, 0, 0, canvas.width, canvas.height);
+
+                        const faces = await sessionRef.current.detector.estimateFaces(canvas);
 
                         if (faces.length > 0) {
+                            noFaceCount = 0;
                             const rawMetrics = calculateMetricsFromFace(faces[0]);
 
-
-                            const smoothedMetrics = smoothMetrics(rawMetrics, sessionRef.current.prevMetrics, 0.15);
+                            const smoothedMetrics = smoothMetrics(rawMetrics, sessionRef.current.prevMetrics, 0.7);
                             sessionRef.current.prevMetrics = smoothedMetrics;
 
-
-                            const now = Date.now();
                             if (now - sessionRef.current.lastRecordTime > 1000) {
                                 sessionRef.current.metrics.push(smoothedMetrics);
                                 sessionRef.current.lastRecordTime = now;
                             }
 
-
-                            if (now - sessionRef.current.lastUiUpdate > 100) {
-                                setCurrentMetrics(smoothedMetrics);
-                                sessionRef.current.lastUiUpdate = now;
+                            setCurrentMetrics(smoothedMetrics);
+                            sessionRef.current.lastUiUpdate = now;
+                        } else {
+                            noFaceCount++;
+                            if (noFaceCount > 30) {
+                                setCurrentMetrics({
+                                    focus_score: 0,
+                                    confusion_level: 0,
+                                    fatigue_score: 0,
+                                    engagement: 0,
+                                    frustration: 0,
+                                    blink_rate: 0,
+                                    head_stability: 0,
+                                });
                             }
                         }
-                    } catch (error) {
-                        console.error('[Camera] Detection error:', error);
+                    } catch {
                     }
-
 
                     if (sessionRef.current.isActive && isMounted) {
                         requestAnimationFrame(detectLoop);
@@ -133,10 +171,21 @@ export function useFaceTracking(
 
                 detectLoop();
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error('[Camera] Failed to start tracking:', error);
                 setIsActive(false);
+                setIsLoading(false);
                 sessionRef.current.isActive = false;
+
+                if (error.name === 'NotReadableError') {
+                    setError('Camera is in use by another app. Please close other apps using the camera and try again.');
+                } else if (error.name === 'NotAllowedError') {
+                    setError('Camera access denied. Please allow camera access in your browser settings.');
+                } else if (error.name === 'NotFoundError') {
+                    setError('No camera found. Please connect a camera and try again.');
+                } else {
+                    setError('Failed to start camera. Please try again.');
+                }
             }
         }
 
@@ -167,7 +216,7 @@ export function useFaceTracking(
 
             setIsActive(false);
             setCurrentMetrics(null);
-            console.log('[Camera] Face tracking stopped');
+
         };
     }, [subtopicId, enabled]);
 
@@ -231,31 +280,30 @@ export function useFaceTracking(
             sessionRef.current.headPoseHistory.shift();
         }
 
-
         const isLookingAtScreen = Math.abs(headPose.yaw) < 20 && Math.abs(headPose.pitch) < 20;
-        const focus_score = isLookingAtScreen ? 90 + (Math.random() * 5) : Math.max(0, 100 - (Math.abs(headPose.yaw) * 2.5));
+        const focus_score = isLookingAtScreen ? 80 + (Math.random() * 5) : Math.max(20, 100 - (Math.abs(headPose.yaw) * 2.0));
 
 
         const currentBrowDist = calculateDistance(keypoints[70], keypoints[300]);
-        const browCompression = baseline.browDistance - currentBrowDist; // Positive if frowning
+        const browCompression = baseline.browDistance - currentBrowDist;
 
-
-        const confusionFromBrows = Math.min(100, Math.max(0, browCompression * 8));
-        const confusionFromTilt = Math.min(100, Math.abs(headPose.roll) * 3);
+        const confusionFromBrows = Math.min(60, Math.max(0, browCompression * 3));
+        const confusionFromTilt = Math.min(60, Math.abs(headPose.roll) * 1.5);
         const confusion_level = (confusionFromBrows * 0.7) + (confusionFromTilt * 0.3);
 
+        const blinkHistoryLen = sessionRef.current.blinkHistory.length;
+        const eyesClosedPercent = blinkHistoryLen > 0
+            ? sessionRef.current.blinkHistory.reduce((a, b) => a + b, 0) / blinkHistoryLen
+            : 0;
+        const fatigue_score = Math.min(100, (eyesClosedPercent * 180) + (estimatedBlinkRate < 5 ? 15 : 0));
 
-        const eyesClosedPercent = sessionRef.current.blinkHistory.reduce((a, b) => a + b, 0) / sessionRef.current.blinkHistory.length;
-        const fatigue_score = Math.min(100, (eyesClosedPercent * 300) + (estimatedBlinkRate < 5 ? 15 : 0));
-
-
-        const headVelocity = calculateHeadStability(); // 0-100 (100 is stable)
+        const headVelocity = calculateHeadStability();
         const headMovement = 100 - headVelocity;
-        const frustration = Math.min(100, (headMovement > 60 ? headMovement : 0) + (estimatedBlinkRate > 35 ? 40 : 0));
+        const frustration = Math.min(100, (headMovement > 75 ? headMovement * 0.6 : 0));
 
-
-        const blinkScore = (estimatedBlinkRate >= 8 && estimatedBlinkRate <= 30) ? 100 : 50;
-        const engagement = (focus_score * 0.5) + (blinkScore * 0.25) + (headVelocity * 0.25);
+        const engagement = isLookingAtScreen
+            ? Math.min(100, 65 + (headVelocity * 0.25) + (Math.random() * 5))
+            : Math.max(30, 60 - Math.abs(headPose.yaw));
 
         return {
             focus_score,
@@ -285,28 +333,39 @@ export function useFaceTracking(
     }
 
     function estimateHeadPose(keypoints: any[]) {
-        // Simplified head pose estimation using key facial points
         const noseTip = keypoints[1];
         const leftEye = keypoints[33];
         const rightEye = keypoints[263];
         const leftMouth = keypoints[61];
         const rightMouth = keypoints[291];
 
-        // Yaw (left-right rotation)
+        if (!noseTip || !leftEye || !rightEye || !leftMouth || !rightMouth) {
+            return { pitch: 0, yaw: 0, roll: 0 };
+        }
+
         const eyeDistance = calculateDistance(leftEye, rightEye);
+        if (eyeDistance === 0) {
+            return { pitch: 0, yaw: 0, roll: 0 };
+        }
+
         const noseToLeftEye = calculateDistance(noseTip, leftEye);
         const noseToRightEye = calculateDistance(noseTip, rightEye);
         const yaw = ((noseToLeftEye - noseToRightEye) / eyeDistance) * 50;
 
-        // Pitch (up-down rotation)
         const eyeCenter = { x: (leftEye.x + rightEye.x) / 2, y: (leftEye.y + rightEye.y) / 2 };
         const mouthCenter = { x: (leftMouth.x + rightMouth.x) / 2, y: (leftMouth.y + rightMouth.y) / 2 };
-        const pitch = ((noseTip.y - eyeCenter.y) / (mouthCenter.y - eyeCenter.y)) * 30 - 15;
+        const mouthEyeDistance = mouthCenter.y - eyeCenter.y;
+        const pitch = mouthEyeDistance !== 0
+            ? ((noseTip.y - eyeCenter.y) / mouthEyeDistance) * 30 - 15
+            : 0;
 
-        // Roll (tilt)
         const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x) * (180 / Math.PI);
 
-        return { pitch, yaw, roll };
+        const safeYaw = isNaN(yaw) ? 0 : yaw;
+        const safePitch = isNaN(pitch) ? 0 : pitch;
+        const safeRoll = isNaN(roll) ? 0 : roll;
+
+        return { pitch: safePitch, yaw: safeYaw, roll: safeRoll };
     }
 
     function calculateDistance(p1: any, p2: any): number {
@@ -316,14 +375,14 @@ export function useFaceTracking(
 
 
     function calculateHeadStability(): number {
-        if (sessionRef.current.headPoseHistory.length < 5) return 80;
+        if (sessionRef.current.headPoseHistory.length < 5) return 85;
 
         const poses = sessionRef.current.headPoseHistory;
         const yawVariance = calculateVariance(poses.map(p => p.yaw));
         const pitchVariance = calculateVariance(poses.map(p => p.pitch));
 
         const avgVariance = (yawVariance + pitchVariance) / 2;
-        return Math.max(0, 100 - avgVariance * 2);
+        return Math.max(50, 100 - avgVariance);
     }
 
     function calculateVariance(values: number[]): number {
@@ -366,17 +425,12 @@ export function useFaceTracking(
                 engagement_score: Math.round(engagement_score),
             });
 
-            console.log('[Camera] Session data sent:', {
-                duration: sessionDuration,
-                samples: metrics.length,
-                engagement_score: Math.round(engagement_score)
-            });
         } catch (error) {
-            console.error('[Camera] Failed to send session data:', error);
+            // console.error('[Camera] Failed to send session data:', error);
         }
     }
 
-    return { isActive, currentMetrics };
+    return { isActive, isLoading, currentMetrics, error };
 }
 
 function average(numbers: number[]): number {
