@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
-import '@tensorflow/tfjs';
 import { api } from '@/lib/api';
 import { createOrGetUser } from '@/logic/userSession';
 
@@ -21,6 +19,31 @@ interface FaceTrackingResult {
     error: string | null;
 }
 
+interface FaceLandmark {
+    x: number;
+    y: number;
+    z?: number;
+}
+
+const ZERO_METRICS: SessionMetrics = {
+    focus_score: 0,
+    confusion_level: 0,
+    fatigue_score: 0,
+    engagement: 0,
+    frustration: 0,
+    blink_rate: 0,
+    head_stability: 0,
+};
+
+const DISTRACTED_METRICS: SessionMetrics = {
+    focus_score: 5,
+    confusion_level: 10,
+    fatigue_score: 20,
+    engagement: 5,
+    frustration: 30,
+    blink_rate: 0,
+    head_stability: 0.5,
+};
 
 export function useFaceTracking(
     subtopicId: string,
@@ -36,39 +59,55 @@ export function useFaceTracking(
         startTime: Date.now(),
         metrics: [] as SessionMetrics[],
         videoRef: null as HTMLVideoElement | null,
-        detector: null as faceLandmarksDetection.FaceLandmarksDetector | null,
-        detectorInterval: null as ReturnType<typeof setInterval> | null,
-        blinkHistory: [] as number[],
-        headPoseHistory: [] as Array<{ pitch: number; yaw: number; roll: number }>,
-
-
+        stream: null as MediaStream | null,
+        faceLandmarker: null as any,
+        animationFrameId: null as number | null,
+        blinkHistory: new Uint8Array(100),
+        blinkIndex: 0,
+        blinkCount: 0,
+        consecutiveClosedFrames: 0,
+        headPoseHistory: new Float32Array(60),
+        poseIndex: 0,
+        poseCount: 0,
         isActive: false,
         prevMetrics: null as SessionMetrics | null,
         lastRecordTime: 0,
-        lastUiUpdate: 0,
-
-
-        baseline: null as {
-            browDistance: number;
-            eyeOpenness: number;
-        } | null,
+        lastDetectionTime: 0,
+        lastUiUpdateTime: 0,
+        isTabVisible: true,
+        tabHiddenTime: 0,
+        baseline: null as { browDistance: number; eyeOpenness: number } | null,
+        reusableMetrics: { ...ZERO_METRICS },
     });
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            const isVisible = document.visibilityState === 'visible';
+            sessionRef.current.isTabVisible = isVisible;
+
+            if (!isVisible) {
+                sessionRef.current.tabHiddenTime = Date.now();
+                setCurrentMetrics(DISTRACTED_METRICS);
+                sessionRef.current.metrics.push({ ...DISTRACTED_METRICS });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     useEffect(() => {
         if (!enabled || !subtopicId) return;
 
         let isMounted = true;
 
-        async function startTracking() {
+        const startTracking = async () => {
             setIsLoading(true);
             setError(null);
-            try {
-                const tf = await import('@tensorflow/tfjs');
-                await tf.setBackend('webgl');
-                await tf.ready();
 
+            try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, facingMode: 'user' }
+                    video: { width: 320, height: 240, facingMode: 'user', frameRate: { ideal: 15, max: 20 } }
                 });
 
                 if (!isMounted) {
@@ -76,139 +115,160 @@ export function useFaceTracking(
                     return;
                 }
 
+                sessionRef.current.stream = stream;
 
                 const video = document.createElement('video');
                 video.srcObject = stream;
                 video.autoplay = true;
                 video.playsInline = true;
+                video.muted = true;
                 sessionRef.current.videoRef = video;
 
                 await video.play();
 
                 await new Promise<void>((resolve) => {
-                    if (video.readyState >= 2) {
-                        resolve();
-                    } else {
-                        video.onloadeddata = () => resolve();
-                    }
+                    if (video.readyState >= 2) resolve();
+                    else video.onloadeddata = () => resolve();
                 });
 
-                const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-                const detectorConfig: faceLandmarksDetection.MediaPipeFaceMeshTfjsModelConfig = {
-                    runtime: 'tfjs',
-                    maxFaces: 1,
-                    refineLandmarks: true,
-                };
+                const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
 
-                const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-                sessionRef.current.detector = detector;
+                const vision = await FilesetResolver.forVisionTasks(
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+                );
 
+                const faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+                        delegate: 'GPU'
+                    },
+                    runningMode: 'VIDEO',
+                    numFaces: 1,
+                    minFaceDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5,
+                    outputFaceBlendshapes: false,
+                    outputFacialTransformationMatrixes: false
+                });
+
+                sessionRef.current.faceLandmarker = faceLandmarker;
+
+                if (!isMounted) {
+                    faceLandmarker.close();
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
 
                 setIsActive(true);
                 setIsLoading(false);
                 sessionRef.current.isActive = true;
 
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
-                const ctx = canvas.getContext('2d')!;
-
                 let noFaceCount = 0;
-                let lastDetectionTime = 0;
 
-                const detectLoop = async () => {
-                    if (!sessionRef.current.detector || !sessionRef.current.videoRef || !isMounted) return;
+                const detectLoop = () => {
+                    if (!sessionRef.current.isActive || !isMounted) return;
 
                     const now = Date.now();
-                    if (now - lastDetectionTime < 50) {
-                        if (sessionRef.current.isActive && isMounted) {
-                            requestAnimationFrame(detectLoop);
+
+                    if (!sessionRef.current.isTabVisible) {
+                        if (now - sessionRef.current.lastRecordTime > 2000) {
+                            sessionRef.current.metrics.push({ ...DISTRACTED_METRICS });
+                            sessionRef.current.lastRecordTime = now;
                         }
+                        sessionRef.current.animationFrameId = requestAnimationFrame(detectLoop);
                         return;
                     }
-                    lastDetectionTime = now;
+
+                    if (now - sessionRef.current.lastDetectionTime < 66) {
+                        sessionRef.current.animationFrameId = requestAnimationFrame(detectLoop);
+                        return;
+                    }
+                    sessionRef.current.lastDetectionTime = now;
+
+                    if (!sessionRef.current.faceLandmarker || !sessionRef.current.videoRef) {
+                        sessionRef.current.animationFrameId = requestAnimationFrame(detectLoop);
+                        return;
+                    }
 
                     try {
-                        ctx.drawImage(sessionRef.current.videoRef, 0, 0, canvas.width, canvas.height);
+                        const results = sessionRef.current.faceLandmarker.detectForVideo(
+                            sessionRef.current.videoRef,
+                            now
+                        );
 
-                        const faces = await sessionRef.current.detector.estimateFaces(canvas);
-
-                        if (faces.length > 0) {
+                        if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                             noFaceCount = 0;
-                            const rawMetrics = calculateMetricsFromFace(faces[0]);
+                            const landmarks = results.faceLandmarks[0];
+                            calculateMetricsFromLandmarks(landmarks, sessionRef.current.reusableMetrics);
 
-                            const smoothedMetrics = smoothMetrics(rawMetrics, sessionRef.current.prevMetrics, 0.7);
-                            sessionRef.current.prevMetrics = smoothedMetrics;
+                            smoothMetricsInPlace(sessionRef.current.reusableMetrics, sessionRef.current.prevMetrics, 0.8);
 
-                            if (now - sessionRef.current.lastRecordTime > 1000) {
-                                sessionRef.current.metrics.push(smoothedMetrics);
+                            if (!sessionRef.current.prevMetrics) {
+                                sessionRef.current.prevMetrics = { ...sessionRef.current.reusableMetrics };
+                            } else {
+                                Object.assign(sessionRef.current.prevMetrics, sessionRef.current.reusableMetrics);
+                            }
+
+                            if (now - sessionRef.current.lastRecordTime > 2000) {
+                                sessionRef.current.metrics.push({ ...sessionRef.current.reusableMetrics });
                                 sessionRef.current.lastRecordTime = now;
                             }
 
-                            setCurrentMetrics(smoothedMetrics);
-                            sessionRef.current.lastUiUpdate = now;
+                            if (now - sessionRef.current.lastUiUpdateTime > 200) {
+                                setCurrentMetrics({ ...sessionRef.current.reusableMetrics });
+                                sessionRef.current.lastUiUpdateTime = now;
+                            }
                         } else {
                             noFaceCount++;
-                            if (noFaceCount > 30) {
-                                setCurrentMetrics({
-                                    focus_score: 0,
-                                    confusion_level: 0,
-                                    fatigue_score: 0,
-                                    engagement: 0,
-                                    frustration: 0,
-                                    blink_rate: 0,
-                                    head_stability: 0,
-                                });
+                            if (noFaceCount > 15 && now - sessionRef.current.lastUiUpdateTime > 200) {
+                                setCurrentMetrics(ZERO_METRICS);
+                                sessionRef.current.lastUiUpdateTime = now;
                             }
                         }
                     } catch {
                     }
 
-                    if (sessionRef.current.isActive && isMounted) {
-                        requestAnimationFrame(detectLoop);
-                    }
+                    sessionRef.current.animationFrameId = requestAnimationFrame(detectLoop);
                 };
 
-                detectLoop();
+                requestAnimationFrame(detectLoop);
 
-            } catch (error: any) {
-                console.error('[Camera] Failed to start tracking:', error);
+            } catch (err: any) {
+                if (!isMounted) return;
+
                 setIsActive(false);
                 setIsLoading(false);
                 sessionRef.current.isActive = false;
 
-                if (error.name === 'NotReadableError') {
-                    setError('Camera is in use by another app. Please close other apps using the camera and try again.');
-                } else if (error.name === 'NotAllowedError') {
-                    setError('Camera access denied. Please allow camera access in your browser settings.');
-                } else if (error.name === 'NotFoundError') {
-                    setError('No camera found. Please connect a camera and try again.');
+                if (err.name === 'NotReadableError') {
+                    setError('Camera is in use by another app.');
+                } else if (err.name === 'NotAllowedError') {
+                    setError('Camera access denied.');
+                } else if (err.name === 'NotFoundError') {
+                    setError('No camera found.');
                 } else {
-                    setError('Failed to start camera. Please try again.');
+                    setError('Failed to start camera.');
                 }
             }
-        }
+        };
 
-        startTracking();
-
+        setTimeout(startTracking, 100);
 
         return () => {
             isMounted = false;
             sessionRef.current.isActive = false;
 
-
-            if (sessionRef.current.videoRef) {
-                const stream = sessionRef.current.videoRef.srcObject as MediaStream;
-                stream?.getTracks().forEach(track => track.stop());
+            if (sessionRef.current.animationFrameId) {
+                cancelAnimationFrame(sessionRef.current.animationFrameId);
             }
 
-
-            if (sessionRef.current.detector) {
-
-
-                sessionRef.current.detector = null;
+            if (sessionRef.current.stream) {
+                sessionRef.current.stream.getTracks().forEach(track => track.stop());
             }
 
+            if (sessionRef.current.faceLandmarker) {
+                sessionRef.current.faceLandmarker.close();
+                sessionRef.current.faceLandmarker = null;
+            }
 
             if (sessionRef.current.metrics.length > 0) {
                 sendSessionData();
@@ -216,203 +276,216 @@ export function useFaceTracking(
 
             setIsActive(false);
             setCurrentMetrics(null);
-
         };
     }, [subtopicId, enabled]);
 
-    function smoothMetrics(newMetrics: SessionMetrics, prev: SessionMetrics | null, alpha: number): SessionMetrics {
-        if (!prev) return newMetrics;
-
-        return {
-            focus_score: prev.focus_score * (1 - alpha) + newMetrics.focus_score * alpha,
-            confusion_level: prev.confusion_level * (1 - alpha) + newMetrics.confusion_level * alpha,
-            fatigue_score: prev.fatigue_score * (1 - alpha) + newMetrics.fatigue_score * alpha,
-            engagement: prev.engagement * (1 - alpha) + newMetrics.engagement * alpha,
-            frustration: prev.frustration * (1 - alpha) + newMetrics.frustration * alpha,
-            blink_rate: prev.blink_rate * (1 - alpha) + newMetrics.blink_rate * alpha, // Blinks needs special handling usually, but for rate it's fine
-            head_stability: prev.head_stability * (1 - alpha) + newMetrics.head_stability * alpha,
-        };
+    function smoothMetricsInPlace(metrics: SessionMetrics, prev: SessionMetrics | null, alpha: number) {
+        if (!prev) return;
+        const invAlpha = 1 - alpha;
+        metrics.focus_score = prev.focus_score * invAlpha + metrics.focus_score * alpha;
+        metrics.confusion_level = prev.confusion_level * invAlpha + metrics.confusion_level * alpha;
+        metrics.fatigue_score = prev.fatigue_score * invAlpha + metrics.fatigue_score * alpha;
+        metrics.engagement = prev.engagement * invAlpha + metrics.engagement * alpha;
+        metrics.frustration = prev.frustration * invAlpha + metrics.frustration * alpha;
+        metrics.blink_rate = prev.blink_rate * invAlpha + metrics.blink_rate * alpha;
+        metrics.head_stability = prev.head_stability * invAlpha + metrics.head_stability * alpha;
     }
 
-    function calculateMetricsFromFace(face: faceLandmarksDetection.Face): SessionMetrics {
-        const keypoints = face.keypoints;
+    function calculateMetricsFromLandmarks(landmarks: FaceLandmark[], out: SessionMetrics) {
+        const leftEAR = calculateEAR(landmarks, 33, 160, 158, 133, 153, 144);
+        const rightEAR = calculateEAR(landmarks, 362, 385, 387, 263, 373, 380);
+        const avgEAR = (leftEAR + rightEAR) * 0.5;
 
-
-        const leftEAR = calculateEAR(keypoints, [33, 160, 158, 133, 153, 144]);
-        const rightEAR = calculateEAR(keypoints, [362, 385, 387, 263, 373, 380]);
-        const avgEAR = (leftEAR + rightEAR) / 2;
-
-
-        if (!sessionRef.current.baseline) {
-            const browDist = calculateDistance(keypoints[70], keypoints[300]); // Brow width
-            if (avgEAR > 0.25) { // Only set baseline if eyes are open
-                sessionRef.current.baseline = {
-                    browDistance: browDist,
-                    eyeOpenness: avgEAR
-                };
-            }
+        if (!sessionRef.current.baseline && avgEAR > 0.2) {
+            sessionRef.current.baseline = {
+                browDistance: calculateDistance(landmarks[70], landmarks[300]),
+                eyeOpenness: avgEAR
+            };
         }
 
-        const baseline = sessionRef.current.baseline || { browDistance: 100, eyeOpenness: 0.3 };
+        const baseline = sessionRef.current.baseline || { browDistance: 0.1, eyeOpenness: 0.25 };
+        const isEyeClosed = avgEAR < baseline.eyeOpenness * 0.6;
 
-
-        const isEyeClosed = avgEAR < (baseline.eyeOpenness * 0.6); // < 60% of open
-
-        sessionRef.current.blinkHistory.push(isEyeClosed ? 1 : 0);
-        if (sessionRef.current.blinkHistory.length > 150) { // 5 seconds history (at 30fps)
-            sessionRef.current.blinkHistory.shift();
+        if (isEyeClosed) {
+            sessionRef.current.consecutiveClosedFrames++;
+        } else {
+            sessionRef.current.consecutiveClosedFrames = 0;
         }
 
+        const isSustainedClosure = sessionRef.current.consecutiveClosedFrames >= 5;
 
-        let blinks = 0;
-        for (let i = 1; i < sessionRef.current.blinkHistory.length; i++) {
-            if (sessionRef.current.blinkHistory[i - 1] === 0 && sessionRef.current.blinkHistory[i] === 1) {
-                blinks++;
-            }
+        const blinkArr = sessionRef.current.blinkHistory;
+        const prevIndex = (sessionRef.current.blinkIndex + 99) % 100;
+        const prevBlink = blinkArr[prevIndex];
+        const currentBlink = isEyeClosed ? 1 : 0;
+        blinkArr[sessionRef.current.blinkIndex] = currentBlink;
+
+        if (prevBlink === 0 && currentBlink === 1) {
+            sessionRef.current.blinkCount++;
         }
 
-        const estimatedBlinkRate = blinks * 12;
+        sessionRef.current.blinkIndex = (sessionRef.current.blinkIndex + 1) % 100;
 
+        let closedCount = 0;
+        for (let i = 0; i < 100; i++) {
+            closedCount += blinkArr[i];
+        }
+        const eyeClosedPercent = closedCount / 100;
 
-        const headPose = estimateHeadPose(keypoints);
-        sessionRef.current.headPoseHistory.push(headPose);
-        if (sessionRef.current.headPoseHistory.length > 30) {
-            sessionRef.current.headPoseHistory.shift();
+        const estimatedBlinkRate = sessionRef.current.blinkCount * 6;
+
+        const headPose = estimateHeadPose(landmarks);
+
+        const poseArr = sessionRef.current.headPoseHistory;
+        const pIdx = sessionRef.current.poseIndex * 3;
+        poseArr[pIdx] = headPose.pitch;
+        poseArr[pIdx + 1] = headPose.yaw;
+        poseArr[pIdx + 2] = headPose.roll;
+        sessionRef.current.poseIndex = (sessionRef.current.poseIndex + 1) % 20;
+        if (sessionRef.current.poseCount < 20) sessionRef.current.poseCount++;
+
+        const isLookingAtScreen = Math.abs(headPose.yaw) < 25 && Math.abs(headPose.pitch) < 25;
+
+        if (isSustainedClosure) {
+            out.focus_score = Math.max(10, 40 - eyeClosedPercent * 30);
+        } else if (isLookingAtScreen) {
+            out.focus_score = 75 + Math.random() * 10;
+        } else {
+            out.focus_score = Math.max(20, 90 - Math.abs(headPose.yaw) * 1.5);
         }
 
-        const isLookingAtScreen = Math.abs(headPose.yaw) < 20 && Math.abs(headPose.pitch) < 20;
-        const focus_score = isLookingAtScreen ? 80 + (Math.random() * 5) : Math.max(20, 100 - (Math.abs(headPose.yaw) * 2.0));
+        const currentBrowDist = calculateDistance(landmarks[70], landmarks[300]);
+        const browCompression = Math.max(0, baseline.browDistance - currentBrowDist);
 
+        out.confusion_level = Math.min(50, browCompression * 200) * 0.7 + Math.min(50, Math.abs(headPose.roll) * 1.2) * 0.3;
 
-        const currentBrowDist = calculateDistance(keypoints[70], keypoints[300]);
-        const browCompression = baseline.browDistance - currentBrowDist;
+        if (isSustainedClosure) {
+            out.fatigue_score = Math.min(100, 60 + eyeClosedPercent * 40);
+        } else {
+            out.fatigue_score = Math.min(100, eyeClosedPercent * 60 + (estimatedBlinkRate < 4 ? 10 : 0));
+        }
 
-        const confusionFromBrows = Math.min(60, Math.max(0, browCompression * 3));
-        const confusionFromTilt = Math.min(60, Math.abs(headPose.roll) * 1.5);
-        const confusion_level = (confusionFromBrows * 0.7) + (confusionFromTilt * 0.3);
+        const headStability = calculateHeadStabilityFast();
+        const headMovement = 100 - headStability;
+        out.frustration = Math.min(100, headMovement > 70 ? headMovement * 0.5 : 0);
 
-        const blinkHistoryLen = sessionRef.current.blinkHistory.length;
-        const eyesClosedPercent = blinkHistoryLen > 0
-            ? sessionRef.current.blinkHistory.reduce((a, b) => a + b, 0) / blinkHistoryLen
-            : 0;
-        const fatigue_score = Math.min(100, (eyesClosedPercent * 180) + (estimatedBlinkRate < 5 ? 15 : 0));
+        if (isSustainedClosure) {
+            out.engagement = Math.max(15, 40 - eyeClosedPercent * 25);
+        } else if (isLookingAtScreen) {
+            out.engagement = Math.min(100, 60 + headStability * 0.3 + Math.random() * 8);
+        } else {
+            out.engagement = Math.max(25, 55 - Math.abs(headPose.yaw) * 0.8);
+        }
 
-        const headVelocity = calculateHeadStability();
-        const headMovement = 100 - headVelocity;
-        const frustration = Math.min(100, (headMovement > 75 ? headMovement * 0.6 : 0));
-
-        const engagement = isLookingAtScreen
-            ? Math.min(100, 65 + (headVelocity * 0.25) + (Math.random() * 5))
-            : Math.max(30, 60 - Math.abs(headPose.yaw));
-
-        return {
-            focus_score,
-            confusion_level,
-            fatigue_score,
-            engagement,
-            frustration,
-            blink_rate: estimatedBlinkRate,
-            head_stability: headVelocity / 100,
-        };
+        out.blink_rate = estimatedBlinkRate;
+        out.head_stability = headStability / 100;
     }
 
-    function calculateEAR(keypoints: any[], indices: number[]): number {
-        // Eye Aspect Ratio formula
-        const p1 = keypoints[indices[1]];
-        const p2 = keypoints[indices[2]];
-        const p3 = keypoints[indices[4]];
-        const p4 = keypoints[indices[5]];
-        const p5 = keypoints[indices[0]];
-        const p6 = keypoints[indices[3]];
+    function calculateEAR(landmarks: FaceLandmark[], i0: number, i1: number, i2: number, i3: number, i4: number, i5: number): number {
+        const p0 = landmarks[i0], p1 = landmarks[i1], p2 = landmarks[i2];
+        const p3 = landmarks[i3], p4 = landmarks[i4], p5 = landmarks[i5];
+        if (!p0 || !p1 || !p2 || !p3 || !p4 || !p5) return 0.3;
 
-        const vertical1 = calculateDistance(p1, p4);
-        const vertical2 = calculateDistance(p2, p3);
-        const horizontal = calculateDistance(p5, p6);
+        const v1 = Math.sqrt((p1.x - p5.x) ** 2 + (p1.y - p5.y) ** 2);
+        const v2 = Math.sqrt((p2.x - p4.x) ** 2 + (p2.y - p4.y) ** 2);
+        const h = Math.sqrt((p0.x - p3.x) ** 2 + (p0.y - p3.y) ** 2);
 
-        return (vertical1 + vertical2) / (2.0 * horizontal);
+        return h === 0 ? 0.3 : (v1 + v2) / (2 * h);
     }
 
-    function estimateHeadPose(keypoints: any[]) {
-        const noseTip = keypoints[1];
-        const leftEye = keypoints[33];
-        const rightEye = keypoints[263];
-        const leftMouth = keypoints[61];
-        const rightMouth = keypoints[291];
+    function estimateHeadPose(landmarks: FaceLandmark[]) {
+        const nose = landmarks[1], leftEye = landmarks[33], rightEye = landmarks[263];
+        const leftMouth = landmarks[61], rightMouth = landmarks[291];
 
-        if (!noseTip || !leftEye || !rightEye || !leftMouth || !rightMouth) {
+        if (!nose || !leftEye || !rightEye || !leftMouth || !rightMouth) {
             return { pitch: 0, yaw: 0, roll: 0 };
         }
 
-        const eyeDistance = calculateDistance(leftEye, rightEye);
-        if (eyeDistance === 0) {
-            return { pitch: 0, yaw: 0, roll: 0 };
+        const eyeDist = Math.sqrt((leftEye.x - rightEye.x) ** 2 + (leftEye.y - rightEye.y) ** 2);
+        if (eyeDist === 0) return { pitch: 0, yaw: 0, roll: 0 };
+
+        const noseToLeft = Math.sqrt((nose.x - leftEye.x) ** 2 + (nose.y - leftEye.y) ** 2);
+        const noseToRight = Math.sqrt((nose.x - rightEye.x) ** 2 + (nose.y - rightEye.y) ** 2);
+        const yaw = ((noseToLeft - noseToRight) / eyeDist) * 60;
+
+        const eyeCenterY = (leftEye.y + rightEye.y) * 0.5;
+        const mouthCenterY = (leftMouth.y + rightMouth.y) * 0.5;
+        const mouthEyeDist = mouthCenterY - eyeCenterY;
+        const pitch = mouthEyeDist !== 0 ? ((nose.y - eyeCenterY) / mouthEyeDist) * 35 - 15 : 0;
+
+        const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x) * 57.2958;
+
+        return {
+            pitch: isNaN(pitch) ? 0 : pitch,
+            yaw: isNaN(yaw) ? 0 : yaw,
+            roll: isNaN(roll) ? 0 : roll
+        };
+    }
+
+    function calculateDistance(p1: FaceLandmark, p2: FaceLandmark): number {
+        if (!p1 || !p2) return 0;
+        return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+    }
+
+    function calculateHeadStabilityFast(): number {
+        const count = sessionRef.current.poseCount;
+        if (count < 3) return 85;
+
+        const poseArr = sessionRef.current.headPoseHistory;
+        let yawSum = 0, pitchSum = 0;
+
+        for (let i = 0; i < count; i++) {
+            yawSum += poseArr[i * 3 + 1];
+            pitchSum += poseArr[i * 3];
         }
 
-        const noseToLeftEye = calculateDistance(noseTip, leftEye);
-        const noseToRightEye = calculateDistance(noseTip, rightEye);
-        const yaw = ((noseToLeftEye - noseToRightEye) / eyeDistance) * 50;
+        const yawMean = yawSum / count;
+        const pitchMean = pitchSum / count;
 
-        const eyeCenter = { x: (leftEye.x + rightEye.x) / 2, y: (leftEye.y + rightEye.y) / 2 };
-        const mouthCenter = { x: (leftMouth.x + rightMouth.x) / 2, y: (leftMouth.y + rightMouth.y) / 2 };
-        const mouthEyeDistance = mouthCenter.y - eyeCenter.y;
-        const pitch = mouthEyeDistance !== 0
-            ? ((noseTip.y - eyeCenter.y) / mouthEyeDistance) * 30 - 15
-            : 0;
+        let yawVar = 0, pitchVar = 0;
+        for (let i = 0; i < count; i++) {
+            yawVar += (poseArr[i * 3 + 1] - yawMean) ** 2;
+            pitchVar += (poseArr[i * 3] - pitchMean) ** 2;
+        }
 
-        const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x) * (180 / Math.PI);
-
-        const safeYaw = isNaN(yaw) ? 0 : yaw;
-        const safePitch = isNaN(pitch) ? 0 : pitch;
-        const safeRoll = isNaN(roll) ? 0 : roll;
-
-        return { pitch: safePitch, yaw: safeYaw, roll: safeRoll };
-    }
-
-    function calculateDistance(p1: any, p2: any): number {
-        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-    }
-
-
-
-    function calculateHeadStability(): number {
-        if (sessionRef.current.headPoseHistory.length < 5) return 85;
-
-        const poses = sessionRef.current.headPoseHistory;
-        const yawVariance = calculateVariance(poses.map(p => p.yaw));
-        const pitchVariance = calculateVariance(poses.map(p => p.pitch));
-
-        const avgVariance = (yawVariance + pitchVariance) / 2;
-        return Math.max(50, 100 - avgVariance);
-    }
-
-    function calculateVariance(values: number[]): number {
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
-        const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
-        return squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+        const avgVariance = (yawVar + pitchVar) / (2 * count);
+        return Math.max(50, 100 - avgVariance * 0.8);
     }
 
     async function sendSessionData() {
         const metrics = sessionRef.current.metrics;
         if (metrics.length === 0) return;
 
-        // Calculate averages over entire session
+        const len = metrics.length;
+        let focus = 0, confusion = 0, fatigue = 0, engagement = 0, frustration = 0, blink = 0, stability = 0;
+
+        for (let i = 0; i < len; i++) {
+            const m = metrics[i];
+            focus += m.focus_score;
+            confusion += m.confusion_level;
+            fatigue += m.fatigue_score;
+            engagement += m.engagement;
+            frustration += m.frustration;
+            blink += m.blink_rate;
+            stability += m.head_stability;
+        }
+
         const avgMetrics = {
-            focus_score: average(metrics.map(m => m.focus_score)),
-            confusion_level: average(metrics.map(m => m.confusion_level)),
-            fatigue_score: average(metrics.map(m => m.fatigue_score)),
-            engagement: average(metrics.map(m => m.engagement)),
-            frustration: average(metrics.map(m => m.frustration)),
-            blink_rate: average(metrics.map(m => m.blink_rate)),
-            head_stability: average(metrics.map(m => m.head_stability)),
+            focus_score: focus / len,
+            confusion_level: confusion / len,
+            fatigue_score: fatigue / len,
+            engagement: engagement / len,
+            frustration: frustration / len,
+            blink_rate: blink / len,
+            head_stability: stability / len,
         };
 
-        // Calculate weighted engagement score
         const engagement_score =
-            (avgMetrics.focus_score * 0.3) +
-            ((100 - avgMetrics.confusion_level) * 0.2) +
-            ((100 - avgMetrics.fatigue_score) * 0.2) +
-            (avgMetrics.engagement * 0.2) +
-            ((100 - avgMetrics.frustration) * 0.1);
+            avgMetrics.focus_score * 0.3 +
+            (100 - avgMetrics.confusion_level) * 0.2 +
+            (100 - avgMetrics.fatigue_score) * 0.2 +
+            avgMetrics.engagement * 0.2 +
+            (100 - avgMetrics.frustration) * 0.1;
 
         const sessionDuration = Math.floor((Date.now() - sessionRef.current.startTime) / 1000);
 
@@ -424,15 +497,9 @@ export function useFaceTracking(
                 ...avgMetrics,
                 engagement_score: Math.round(engagement_score),
             });
-
-        } catch (error) {
-            // console.error('[Camera] Failed to send session data:', error);
+        } catch {
         }
     }
 
     return { isActive, isLoading, currentMetrics, error };
-}
-
-function average(numbers: number[]): number {
-    return numbers.reduce((sum, n) => sum + n, 0) / numbers.length;
 }

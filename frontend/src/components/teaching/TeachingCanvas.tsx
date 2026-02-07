@@ -92,25 +92,29 @@ export function TeachingCanvas({
     registerBlockSpeaker(() => speakCurrentBlockRef.current());
   }, [registerBlockSpeaker]);
 
-  // Optimized: Prefetch ALL blocks in the current lesson at once
   useEffect(() => {
-    if (!blocks || blocks.length <= 1) return;
+    if (!blocks || blocks.length === 0) return;
 
-    // Small delay to let the first block start speaking first (priority)
+    const firstBlockTexts: string[] = [];
+    const firstScripts = converterRef.current.convertBlock(blocks[0], 0, blocks.length);
+    firstScripts.forEach(s => s.text && firstBlockTexts.push(s.text));
+    if (firstBlockTexts.length > 0) {
+      prefetch(firstBlockTexts);
+    }
+
+    if (blocks.length <= 1) return;
+
     const timer = setTimeout(() => {
       const allTexts: string[] = [];
-      // Skip index 0 as it's likely spoken immediately
-      // Start from index 1 to end
       for (let i = 1; i < blocks.length; i++) {
         const scripts = converterRef.current.convertBlock(blocks[i], i, blocks.length);
         scripts.forEach(s => s.text && allTexts.push(s.text));
       }
 
       if (allTexts.length > 0) {
-        console.log('🚀 Prefetching entire lesson voice content:', allTexts.length, 'utterances');
         prefetch(allTexts);
       }
-    }, 2000); // Wait 2s to allow initial speak to grab network first
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [blocks, subtopicId, prefetch]);
@@ -129,7 +133,7 @@ export function TeachingCanvas({
       if (lastSpokenRef.current === key && isOn && subtopicId && blocks.length > 0) {
         speakCurrentBlockRef.current();
       }
-    }, 1000);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [isOn, subtopicId, currentChunkIndex, blocks.length]);

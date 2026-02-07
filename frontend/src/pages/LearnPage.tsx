@@ -120,16 +120,18 @@ export default function LearnPage() {
   useEffect(() => {
     if (!nextSubtopic?.id || !teachingData) return;
 
+    const delay = accessibility?.isOn ? 20000 : 3000;
+
     const timer = setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ['teaching', nextSubtopic.id],
         queryFn: () => api.getTeachingContent(nextSubtopic.id, uid),
         staleTime: Infinity,
       });
-    }, 10000);
+    }, delay);
 
     return () => clearTimeout(timer);
-  }, [nextSubtopic, queryClient, uid, teachingData]);
+  }, [nextSubtopic, queryClient, uid, teachingData, accessibility?.isOn]);
 
 
 
