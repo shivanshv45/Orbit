@@ -47,8 +47,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
     }, []);
 
     const processCommand = useCallback((text: string) => {
-        console.log('Processing command:', text);
-
         if (commandHandlerRef.current) {
             const handled = commandHandlerRef.current(text);
             if (handled) return;
@@ -56,7 +54,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
 
         const lower = text.toLowerCase();
 
-        // Voice mode control
         if (lower.includes('off') || lower.includes('disable') || lower.includes('exit voice')) {
             engineRef.current?.speak('Voice mode off');
             setTimeout(() => {
@@ -66,13 +63,11 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
             return;
         }
 
-        // Help command
         if (lower.includes('help')) {
             engineRef.current?.speak('Commands: next, back, home, curriculum, upload, repeat, faster, slower, off');
             return;
         }
 
-        // Navigation commands - stop speaking first
         if (lower.includes('home') || lower.includes('go home') || lower.includes('main page')) {
             engineRef.current?.stopSpeaking();
             engineRef.current?.speak('Going home');
@@ -108,7 +103,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
             return;
         }
 
-        // If no command matched
         engineRef.current?.speak('Command not recognized. Say help for available commands.');
     }, []);
 
@@ -130,11 +124,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
                 processCommand,
                 (listening) => {
                     setIsListening(listening);
-
-                    if (!listening && ctrlDownRef.current && isOn) {
-                        console.log("Restarting listening as Control is still held");
-                        setTimeout(() => engine.startListening(), 10);
-                    }
                 },
                 setIsSpeaking
             );
@@ -158,7 +147,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
 
             }
 
-            // Accessibility toggle: Alt + V
             if (e.altKey && e.code === 'KeyV') {
                 e.preventDefault();
                 toggle();
@@ -196,7 +184,6 @@ export function AccessibilityModeProvider({ children }: { children: React.ReactN
                 e.preventDefault();
                 e.stopPropagation();
                 ctrlDownRef.current = false;
-                // Wait 500ms for recognition to finish processing
                 setTimeout(() => {
                     if (!ctrlDownRef.current) {
                         engineRef.current?.stopListening();

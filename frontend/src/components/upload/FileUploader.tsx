@@ -36,6 +36,7 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const getFileType = (fileName: string): UploadedFile['type'] => {
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -105,6 +106,7 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
 
     setIsProcessing(true);
     setProgress(0);
+    setError(null);
 
     const filesToUpload = files.filter(f => f.status === 'uploading' || f.status === 'ready' || f.status === 'processing');
 
@@ -182,8 +184,8 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
       setTimeout(() => {
         onUploadComplete();
       }, 800);
-    } catch (error) {
-      console.error('Error uploading files:', error);
+    } catch (err) {
+      console.error('Error uploading files:', err);
       clearInterval(progressInterval);
       setFiles(prev => prev.map(f =>
         filesToUpload.some(fu => fu.id === f.id)
@@ -192,6 +194,7 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
       ));
       setIsProcessing(false);
       setProgress(0);
+      setError('Failed to upload files. Please check your connection and try again.');
     }
   };
 
@@ -336,6 +339,16 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+        >
+          {error}
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {allFilesReady && (

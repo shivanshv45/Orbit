@@ -186,10 +186,12 @@ export class PiperVoiceEngine {
     public stopListening(): void {
         if (!this.recognition || !this.isListening) return;
 
+        this.isListening = false;
+        this.onListeningChange?.(false);
+
         try {
             this.recognition.stop();
         } catch { }
-
     }
 
     public stopSpeaking(): void {
@@ -298,8 +300,6 @@ export class PiperVoiceEngine {
         const itemsToPlay = [...this.speechQueue];
         this.speechQueue = [];
 
-
-
         if (itemsToPlay.length === 0) {
             this.isSpeaking = false;
             this.onSpeakingChange?.(false);
@@ -315,7 +315,6 @@ export class PiperVoiceEngine {
         try {
             for (const text of itemsToPlay) {
                 if (this.stopGeneration !== gen) {
-                    // console.log('🔊 queue interrupted by new speak');
                     break;
                 }
 
@@ -334,9 +333,7 @@ export class PiperVoiceEngine {
     private async playText(text: string): Promise<void> {
         const gen = this.activeGeneration;
 
-
         if (this.stopGeneration !== gen) {
-            // console.log('🔊 playText() cancelled: gen mismatch');
             return;
         }
 
@@ -354,10 +351,8 @@ export class PiperVoiceEngine {
 
             const audioUrl = await this.getAudioUrl(text);
             if (!audioUrl) {
-
                 this.backendFailures++;
                 if (this.backendFailures >= 3) {
-
                     this.useBrowserFallback = true;
                 }
                 await this.playWithBrowserTTS(text, gen);
@@ -498,7 +493,6 @@ export class PiperVoiceEngine {
             return this.pendingFetches.get(key)!;
         }
 
-        // Check IndexedDB persistent cache
         try {
             const cachedBlob = await audioCacheDB.get(key);
             if (cachedBlob) {
@@ -537,7 +531,6 @@ export class PiperVoiceEngine {
             if (res.ok) {
                 const blob = await res.blob();
                 if (blob.size > 100) {
-                    // Save to persistent cache
                     audioCacheDB.set(key, blob).catch(e => console.warn('Cache write failed', e));
 
                     const url = URL.createObjectURL(blob);
@@ -552,7 +545,7 @@ export class PiperVoiceEngine {
 
     public async prefetch(texts: string[]): Promise<void> {
         const uniqueTexts = [...new Set(texts.filter(t => t?.trim()))];
-        const CONCURRENT_LIMIT = 3;
+        const CONCURRENT_LIMIT = 5;
 
         for (let i = 0; i < uniqueTexts.length; i += CONCURRENT_LIMIT) {
             const batch = uniqueTexts.slice(i, i + CONCURRENT_LIMIT);
@@ -563,8 +556,9 @@ export class PiperVoiceEngine {
                 }
                 return Promise.resolve();
             }));
-            // Small delay between batches to yield to main thread
-            await new Promise(r => setTimeout(r, 50));
+            if (i + CONCURRENT_LIMIT < uniqueTexts.length) {
+                await new Promise(r => setTimeout(r, 20));
+            }
         }
     }
 
