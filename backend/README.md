@@ -1,42 +1,51 @@
-# Orbit Backend Engineering
+# Orbit Backend ⚙️
 
-> High-performance async API built with FastAPI, Python 3.12, and PostgreSQL.
+The intelligence engine powering Orbit. Handles AI processing, data persistence, and content generation.
 
-## 🧠 AI & Parsing Pipelines
+## 🧱 Tech Stack
 
-### 1. Intelligent Content Parsing
-- **Hybrid Extraction Engine**: Combines `Unstructured.io` for layout analysis with custom heuristic post-processing.
-- **Semantic Splitting Algorithm** (`manual_parsing.py`):
-  - Uses `Spacy` (NLP) to calculate vector cosine similarity between adjacent subtopics.
-  - Dynamically slices content into Modules based on semantic drift and balanced distribution (2-6 subtopics/module).
-  - Cleaning pipeline using `ftfy` to normalize text encodings and remove artifacts.
+*   **Framework**: FastAPI
+*   **Server**: Uvicorn
+*   **Database**: PostgreSQL (via SQLAlchemy & Psycopg2)
+*   **AI/LLM**: Google Gemini (`google-genai`)
+*   **NLP**: Spacy
+*   **TTS**: Piper (WASM)
 
-### 2. Adaptive Teaching Engine (`Gemini_Services/`)
-- **Multi-Model Fallback Architecture**:
-  - Primary: `gemini-3-flash-preview` (Higher reasoning).
-  - Fallback: `gemini-2.5-flash` (Retries on quota/latency errors).
-- **Key Rotation System**: `GeminiKeyManager` implements a circular buffer for API keys, automatically handling `429 Resource Exhausted` errors transparently.
-- **Dynamic Context Injection**: Retrieval system fetches neighboring subtopic context to ensure AI teaching continuity.
+## 🔧 Key Services
 
-### 3. Revision System
-- **Milestone Detection**: Automated triggers at 25%, 50%, 75%, and 100% curriculum completion.
-- **Weakness Analysis**: Aggregates `subtopic.score` data to identify lowest-performing knowledge areas.
-- **Targeted Generation**: Synthesizes specialized "Revision Notes" and "Review Questions" specifically targeting identified weak points.
+*   **`gemini_service.py`**: Interacts with Google's Gemini models for content generation.
+*   **`piper_voice.py`**: Manages text-to-speech synthesis specifically for backend generation.
+*   **`db_services/`**: Handles all database interactions and schema management.
+*   **`parsing/`**: Uses `Unstructured` to ingest and process user uploaded files.
 
-## 🏗️ System Architecture
+## 🚀 Setup & Run
 
-### Data Persistence
-- **Schema**: Relational hierarchy `Users -> Curriculums -> Modules -> Subtopics`.
-- **Teaching Cache**: `teaching_blocks` uses `JSONB` storage to cache complex, structured AI responses, eliminating redundant generation costs.
-- **Optimized SQL**: Raw `SQLAlchemy` Core usage for complex aggregation queries (scoring/metrics).
+1.  Create and activate a virtual environment:
+    ```bash
+    python -m venv venv
+    # Windows
+    venv\Scripts\activate
+    # Mac/Linux
+    source venv/bin/activate
+    ```
 
-### API Design
-- **Stateless Session Handling**: Pure REST architecture; Session identity resolved via `X-User-Id` headers (supporting both Auth/Guest UUIDs uniformly).
-- **Async I/O**: Fully asynchronous route handlers for non-blocking database and external API operations.
+2.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-## 🚀 Deployment
+3.  Set up environment variables (create `.env`):
+    ```env
+    DATABASE_URL=postgresql://...
+    GEMINI_API_KEY=...
+    # Add other keys as needed
+    ```
 
-### Piper TTS Hosting
-> **Critical Deployment Note:**
-> To host this application on a free tier (Render, Railway, etc.), you must **replace the Windows Piper binary (`piper.exe`) with the Linux version**.
-> The current `.env` points to the local Windows executable. Ensure your production environment uses the compatible Linux binary for voice synthesis to work.
+4.  Run the server:
+    ```bash
+    uvicorn main:app --reload
+    ```
+    Or use the helper script:
+    ```bash
+    python run_server.py
+    ```

@@ -126,15 +126,15 @@ function Scene() {
         <>
             <PerspectiveCamera makeDefault position={[0, -2, 20]} fov={60} />
 
-            <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            <Sparkles count={100} scale={25} size={2.5} speed={0.3} opacity={0.5} color="#c7d2fe" />
+            <Stars radius={100} depth={50} count={2500} factor={4} saturation={0} fade speed={1} />
+            <Sparkles count={50} scale={25} size={2.5} speed={0.3} opacity={0.5} color="#c7d2fe" />
 
             <group rotation={[Math.PI / 6, 0, 0]}>
                 <GlowingSun />
 
-                <ParticleRing count={150} radius={8} color="#a78bfa" size={0.1} speed={2} />
-                <ParticleRing count={200} radius={12} color="#818cf8" size={0.15} speed={1.5} />
-                <ParticleRing count={300} radius={18} color="#2dd4bf" size={0.1} speed={1} />
+                <ParticleRing count={100} radius={8} color="#a78bfa" size={0.1} speed={2} />
+                <ParticleRing count={150} radius={12} color="#818cf8" size={0.15} speed={1.5} />
+                <ParticleRing count={200} radius={18} color="#2dd4bf" size={0.1} speed={1} />
 
                 <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
                     <Planet position={[10, 0, 5]} size={1.3} color="#a855f7" hasRings ringColor="#f0abfc" glowIntensity="high" />

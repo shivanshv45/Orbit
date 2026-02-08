@@ -1,199 +1,85 @@
-# Orbit - AI-Powered Adaptive Learning Platform
+# Orbit 🪐
 
-Orbit is an intelligent learning platform that transforms uploaded study materials into interactive, adaptive lessons with AI-generated content, simulations, and questions.
+**The Intelligent, Adaptive Study Companion.**
 
-## 🚀 Current Features
+Orbit is a next-generation education platform that adapts to *you*. By combining real-time engagement tracking, AI-generated interactive content, and robust accessibility features, Orbit creates a personalized learning environment that evolves with your needs.
 
-### ✅ Document Processing & Curriculum Generation
-- Upload PDF, DOCX, and other document formats
-- Automatic curriculum extraction using Unstructured API
-- Hierarchical content organization: **Curriculums → Modules → Subtopics**
-- Each upload creates a separate curriculum
-- Content decomposition into structured learning units
+![Orbit App Screenshot](https://github.com/user-attachments/assets/placeholder) 
+*(Add actual screenshot here)*
 
-### ✅ AI-Powered Teaching Content
-- **Dual AI Model System**:
-  - Primary: Gemini 3 Flash Preview
-  - Fallback: Gemini 2.5 Flash (when quota exhausted)
-- **Automatic API Key Rotation**: Handles multiple API keys with 429 error detection
-- **Adaptive Content Generation**: Adjusts difficulty based on learner score (0-100)
-- **Content Types**:
-  - Paragraphs (explanatory text)
-  - Formulas (mathematical equations with explanations)
-  - Insights (key takeaways)
-  - Lists (structured information)
-  - **Interactive HTML Simulations** (with inline CSS/JS)
-  - Questions (MCQ and fill-in-blank)
+## 📖 About The Project
 
-### ✅ Interactive Simulations
-- AI-generated HTML/CSS/JavaScript simulations
-- Proper script execution in React using custom `SimulationBlock` component
-- Real-time interactive visualizations
-- Stored in database for caching
+For the full story behind Orbit, including our inspiration, challenges, and future plans, check out [**ABOUT.md**](./ABOUT.md).
 
-### ✅ Question & Scoring System
-- **Client-Side Attempt Tracking**
-- **Smart Feedback System**:
-  - Hints on wrong answers (attempts 1-3)
-  - Full explanation on 4th attempt or correct answer
-- **Automatic Scoring**:
-  - 1st attempt: 1.0 (100%)
-  - 2nd attempt: 0.75 (75%)
-  - 3rd attempt: 0.5 (50%)
-  - 4th+ attempt: 0.25 (25%)
-- Score calculation happens client-side, sent to backend when all questions complete
-- Subtopic score = average of all question scores (0-100 scale)
-- Auto-continue after correct answers (300ms delay)
+## ✨ Key Features
 
-### ✅ Curriculum Management
-- **Database Schema**:
-  ```
-  users → curriculums → modules → subtopics
-  ```
-- Multiple curriculums per user
-- Progress tracking per subtopic
-- Score persistence in `subtopics.score`
-
-### ✅ Content Caching
-- Teaching blocks cached in `teaching_blocks` table (PostgreSQL JSONB)
-- Prevents redundant AI API calls
-- Instant content loading on revisits
+-   **📄 Smart Decomposition**: Upload PDFs/text and get structured, bite-sized modules.
+-   **🎯 Adaptive Learning**: Content adapts based on your quiz scores and real-time engagement.
+-   **👁️ Engagement Tracking**: Uses client-side computer vision (MediaPipe) to detect confusion or focus.
+-   **🔬 Interactive Simulations**: AI-generated simulations to visualize complex topics.
+-   **🗣️ Voice-First Accessibility**: Full navigation and interaction via voice for visually impaired users.
+-   **🔁 Smart Revision**: Targeted revision sessions based on your "lagging" topics.
 
 ## 🛠️ Tech Stack
 
-### Backend
-- **Framework**: FastAPI (Python)
-- **Database**: PostgreSQL (Neon DB)
-- **ORM**: SQLAlchemy (raw SQL for performance)
-- **AI Services**:
-  - Google Gemini API (3-flash-preview, 2.5-flash)
-  - Unstructured API (document parsing)
-- **Validation**: Pydantic
-- **Environment**: python-dotenv
+### **Frontend**
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Threejs](https://img.shields.io/badge/Threejs-black?style=for-the-badge&logo=three.js&logoColor=white)
+*   **Framework**: React (Vite)
+*   **State**: TanStack Query
+*   **UI**: Shadcn/UI, Framer Motion
 
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Routing**: React Router v6
-- **State Management**: @tanstack/react-query (for server state)
-- **Animations**: Framer Motion
-- **Styling**: CSS (custom design system)
-- **Icons**: Lucide React
-- **UI Utilities**: Custom component library
+### **Backend**
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+*   **Server**: FastAPI (Uvicorn)
+*   **AI**: Google Gemini, Spacy, MediaPipe
+*   **TTS**: Piper (WASM)
+*   **DB**: Neon Tech (PostgreSQL)
 
-### Infrastructure
-- **CORS**: Enabled for development
-- **API Architecture**: RESTful
-- **Caching Strategy**: Server-side (PostgreSQL) + Client-side (React Query)
+## 🚀 Getting Started
 
-## 📁 Project Structure
+### Prerequisites
+*   Node.js (v18+)
+*   Python (v3.10+)
+*   PostgreSQL Database
 
-```
-Orbit/
-├── backend/
-│   ├── routes/               # API endpoints
-│   │   ├── parse.py         # Document upload & parsing
-│   │   ├── curriculum.py    # Curriculum fetching
-│   │   ├── teaching.py      # Teaching content generation
-│   │   ├── attempts.py      # Score updates
-│   │   └── users.py         # User management
-│   ├── services/
-│   │   ├── Gemini_Services/ # AI content generation
-│   │   │   ├── gemini_service.py      # Main generation logic
-│   │   │   ├── key_manager.py         # API key rotation
-│   │   │   └── teaching_prompt.py     # Prompts
-│   │   ├── db_services/     # Database operations
-│   │   │   ├── db.py        # Session management
-│   │   │   └── push_to_db.py # Curriculum upload
-│   │   ├── unstructured_service.py  # Document parsing
-│   │   └── manual_parsing.py        # Content extraction
-│   ├── config.py            # Environment config
-│   ├── main.py              # FastAPI app
-│   └── .env                 # API keys (not committed)
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── teaching/    # Teaching content components
-│   │   │   │   ├── TeachingCanvas.tsx    # Main content display
-│   │   │   │   ├── QuestionBlock.tsx     # Interactive questions
-│   │   │   │   ├── SimulationBlock.tsx   # HTML simulations
-│   │   │   │   └── AskAIChat.tsx         # AI chat feature
-│   │   │   ├── curriculum/  # Curriculum navigation
-│   │   │   └── layout/      # Layout components
-│   │   ├── pages/           # Route pages
-│   │   ├── hooks/           # Custom React hooks
-│   │   ├── lib/             # Utilities & API client
-│   │   ├── logic/           # Business logic
-│   │   └── types/           # TypeScript definitions
-│   └── index.html
-│
-└── README.md (this file)
-```
+### Installation
 
-## 🔑 Key Implementation Details
+1.  **Clone the repo**
+    ```sh
+    git clone https://github.com/shivanshv45/Orbit.git
+    cd Orbit
+    ```
 
-### API Key Rotation System
-- Loads keys from environment: `GEMINI_API_KEY_1`, `_2`, `_3`...
-- Circular rotation on 429 errors
-- Tries each key once per request
-- Fails gracefully after exhausting all keys
+2.  **Setup Backend**
+    ```sh
+    cd backend
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+    pip install -r requirements.txt
+    ```
 
-### Simulation Rendering
-- React's `dangerouslySetInnerHTML` blocks `<script>` execution
-- **Solution**: Custom `useEffect` hook that:
-  1. Sets HTML via `innerHTML`
-  2. Extracts all `<script>` tags
-  3. Creates new script elements to execute them
-  4. Properly cleans up on unmount
+3.  **Setup Frontend**
+    ```sh
+    cd frontend
+    npm install
+    ```
 
-### Score Calculation Flow
-1. User answers question → Client tracks attempts
-2. On correct answer → Calculate score based on attempt count
-3. When all questions complete → Calculate average
-4. Send final score to backend → Update `subtopics.score`
+4.  **Run Development Servers**
+    *   Backend: `python run_server.py`
+    *   Frontend: `npm run dev`
 
-### Content Generation Pipeline
-1. User selects subtopic
-2. Backend checks cache (`teaching_blocks` table)
-3. If not cached:
-   - Fetch subtopic content + nearby context
-   - Call Gemini with adaptive prompt
-   - Parse response into structured blocks
-   - Cache in database
-4. Return blocks to frontend
+---
 
-### Voice Mode Implementation
-- **Architecture**: Hybrid Approach
-  - **Speech Recognition**: Uses browser-native **Web Speech API** (Chrome/Edge recommended) for zero-latency, offline-capable command detection.
-  - **Text-to-Speech**: Uses backend **Piper TTS** for high-quality, consistent voice generation.
-  - **Caching**: Multi-level caching (browser cache + in-memory) for instant playback of common phrases.
-- **Features**:
-  - Push-to-Talk (Hold Control)
-  - Smart Prefetching (loads next section's audio in background)
-  - Automatic Speech Queueing (prevents overlapping audio)
-  - Cross-browser graceful degradation (warns on unsupported browsers)
+## 📂 Documentation
 
-## 📚 Documentation
+-   [**Frontend Details**](./frontend/README.md)
+-   [**Backend Details**](./backend/README.md)
+-   [**Developer Docs**](./docs/README.md)
 
-- `README_TDT.md` - Technical design document
-- `FEATURE_ORDER.md` - Feature implementation roadmap
-- `DOCS_OVERVIEW.md` - Documentation guide
-- `PROGRESS.md` - Development progress tracker
-
-## 🐛 Known Issues
-
-None currently! 🎉
-
-## 🔮 Next Steps
-
-See `FEATURE_ORDER.md` for the complete roadmap. Priority features:
-1. Camera-based engagement tracking
-2. Module unlocking system
-3. Skip subtopic feature
-4. Advanced analytics
-5. Production deployment
-
-## 📄 License
-
-Private project - All rights reserved
+---
+*Built with ❤️ by the Orbit Team*
