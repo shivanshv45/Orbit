@@ -88,5 +88,4 @@ For the full story behind Orbit, including our inspiration, challenges, and futu
 -   [**Backend Details**](./backend/README.md)
 -   [**Developer Docs**](./docs/README.md)
 
----
-*Built with ❤️ by the Orbit Team*
+
