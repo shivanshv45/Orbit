@@ -128,7 +128,7 @@
 
   /* Glass card effect */
   .glass-card {
-    @apply bg-card/80 backdrop-blur-md border border-border/50 shadow-sm;
+    @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-sm;
   }
 
   /* Progress glow effect */
