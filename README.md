@@ -32,6 +32,8 @@ For the full story behind Orbit, including our inspiration, challenges, and futu
 *   **Framework**: React (Vite)
 *   **State**: TanStack Query
 *   **UI**: Shadcn/UI, Framer Motion
+   <img width="5805" height="3255" alt="Christmas Shopping Car Flow-2026-02-08-102345" src="https://github.com/user-attachments/assets/33206b44-a2fa-4cea-92ca-95d8c16a3c5b" />
+
 
 ### **Backend**
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
@@ -41,6 +43,9 @@ For the full story behind Orbit, including our inspiration, challenges, and futu
 *   **AI**: Google Gemini, Spacy, MediaPipe
 *   **TTS**: Piper (WASM)
 *   **DB**: Neon Tech (PostgreSQL)
+<img width="8192" height="2737" alt="Christmas Shopping Car Flow-2026-02-08-102637" src="https://github.com/user-attachments/assets/da82fc61-5e23-467c-9493-8245e3f1fe44" />
+<img width="3610" height="2780" alt="Christmas Shopping Car Flow-2026-02-08-102839" src="https://github.com/user-attachments/assets/0768f011-4a5b-44fe-99fd-b69f2fe7f65b" />
+<img width="5959" height="6961" alt="Untitled diagram-2026-02-08-103047" src="https://github.com/user-attachments/assets/c5c86237-28bf-4e02-b4bc-506c56630714" />
 
 ## 🚀 Getting Started
 
