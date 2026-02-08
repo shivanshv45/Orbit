@@ -4,8 +4,10 @@
 
 Orbit is a next-generation education platform that adapts to *you*. By combining real-time engagement tracking, AI-generated interactive content, and robust accessibility features, Orbit creates a personalized learning environment that evolves with your needs.
 
-![Orbit App Screenshot](https://github.com/user-attachments/assets/placeholder) 
-*(Add actual screenshot here)*
+![Orbit App Screenshot]
+<img width="1470" height="837" alt="Screenshot 2026-02-08 at 2 12 42 PM" src="https://github.com/user-attachments/assets/aa54c5a2-af9f-43ae-90c5-ad333a30aa27" />
+
+<img width="1470" height="831" alt="Screenshot 2026-02-08 at 2 23 07 PM" src="https://github.com/user-attachments/assets/568cc522-9935-4877-8c67-e3524d6c13e2" />
 
 ## 📖 About The Project
 
