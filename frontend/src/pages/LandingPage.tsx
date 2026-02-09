@@ -195,7 +195,7 @@ export default function LandingPage() {
                     >
                       <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm font-medium mb-6 backdrop-blur-sm">
                         <Sparkles className="w-4 h-4" />
-                        AI-Guided Learning
+                        Shut up and Learn
                       </span>
                     </motion.div>
 
