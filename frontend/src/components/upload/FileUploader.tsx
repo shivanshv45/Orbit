@@ -240,7 +240,7 @@ export function FileUploader({ onUploadComplete }: FileUploaderProps) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Click to add demo files or drag & drop your materials
+            Click to add files or drag & drop your materials
           </p>
         </div>
 
