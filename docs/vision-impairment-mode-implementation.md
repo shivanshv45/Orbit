@@ -71,4 +71,4 @@ This mode turns Orbit into a fully voice-driven educational experience.
     - Try navigating between lessons.
 
 ---
-**Status:** ✅ Complete & Polished
+**Status:**  Complete & Polished
