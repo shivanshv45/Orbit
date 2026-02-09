@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, Presentation, Image, FileSpreadsheet, X, Check, Sparkles } from 'lucide-react';
+import { Upload, FileText, Presentation, Image, X, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createOrGetUser } from '@/logic/userSession';
 import { useUser } from '@clerk/clerk-react';

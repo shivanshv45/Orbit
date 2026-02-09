@@ -86,6 +86,5 @@ For the full story behind Orbit, including our inspiration, challenges, and futu
 
 -   [**Frontend Details**](./frontend/README.md)
 -   [**Backend Details**](./backend/README.md)
--   [**Developer Docs**](./docs/README.md)
 
 
